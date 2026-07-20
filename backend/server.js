@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { initBot } = require('./telegram');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
@@ -58,7 +59,7 @@ let serverStatus = {
   tps: 20,
   memory: { used: 0, max: 0 },
   uptime: 0,
-  version: process.env.VERSION || '1.21.11'
+  version: process.env.VERSION || '1.16.5'
 };
 
 async function connectRcon() {
@@ -318,13 +319,18 @@ app.post('/api/config', authenticate, requireRole('owner', 'admin'), async (req,
 app.post('/api/server/start', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
     if (serverStatus.online) return res.json({ success: true, message: 'Server already running' });
-    const jarPath = path.join(MC_SERVER_DIR, 'server.jar');
-    if (!await fs.pathExists(jarPath)) return res.status(500).json({ success: false, error: 'server.jar not found' });
+    const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
+    if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
+    const files = await fs.readdir(MC_SERVER_DIR);
+    const forgeJar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
+    const jarPath = forgeJar ? path.join(MC_SERVER_DIR, forgeJar) : path.join(MC_SERVER_DIR, 'server.jar');
+    if (!await fs.pathExists(jarPath)) return res.status(500).json({ success: false, error: 'server jar not found' });
     const mcProcess = spawn('java', ['-Xms256M', '-Xmx512M', '-jar', jarPath, '--nogui'], {
       cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
     });
     mcProcess.unref();
     rconRetries = 0;
+    rconConnecting = false;
     setTimeout(connectRcon, 15000);
     logActivity(req.user.id, 'server_start', 'Started server', req.ip);
     res.json({ success: true, message: 'Server starting...' });
@@ -335,8 +341,14 @@ app.post('/api/server/start', authenticate, requireRole('owner', 'admin'), async
 
 app.post('/api/server/stop', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
-    if (!serverStatus.online) return res.json({ success: true, message: 'Server already stopped' });
-    await executeCommand('stop');
+    const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
+    await fs.writeFile(stoppedFlag, 'stopped by user');
+    if (serverStatus.online) {
+      await executeCommand('stop');
+    }
+    serverStatus.online = false;
+    serverStatus.players = [];
+    io.emit('serverStatus', serverStatus);
     logActivity(req.user.id, 'server_stop', 'Stopped server', req.ip);
     res.json({ success: true });
   } catch (err) {
@@ -346,8 +358,23 @@ app.post('/api/server/stop', authenticate, requireRole('owner', 'admin'), async 
 
 app.post('/api/server/restart', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
-    if (!serverStatus.online) return res.status(500).json({ success: false, error: 'Server is not running' });
-    await executeCommand('restart');
+    const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
+    if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
+    if (serverStatus.online) {
+      await executeCommand('restart');
+    } else {
+      const files = await fs.readdir(MC_SERVER_DIR);
+      const forgeJar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
+      const jarPath = forgeJar ? path.join(MC_SERVER_DIR, forgeJar) : path.join(MC_SERVER_DIR, 'server.jar');
+      if (!await fs.pathExists(jarPath)) return res.status(500).json({ success: false, error: 'server jar not found' });
+      const mcProcess = spawn('java', ['-Xms256M', '-Xmx512M', '-jar', jarPath, '--nogui'], {
+        cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
+      });
+      mcProcess.unref();
+      rconRetries = 0;
+      rconConnecting = false;
+      setTimeout(connectRcon, 15000);
+    }
     logActivity(req.user.id, 'server_restart', 'Restarted server', req.ip);
     res.json({ success: true });
   } catch (err) {
@@ -560,6 +587,13 @@ async function startServer() {
     console.error('Database init error:', e.message);
   }
   
+  try {
+    const database = getDb();
+    initBot(database, executeCommand, () => serverStatus, logActivity);
+  } catch(e) {
+    console.log('Telegram bot skip:', e.message);
+  }
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Panel server running on port ${PORT}`);
     try { connectRcon(); } catch(e) { console.log('RCON skip:', e.message); }

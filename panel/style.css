@@ -261,6 +261,11 @@ body {
 .toast.error { background: #C73232; color: white; box-shadow: inset -2px -2px 0 #5A1616, inset 2px 2px 0 #E85454; }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
+.pass-wrap { position: relative; }
+.pass-wrap .mc-input { padding-left: 45px; }
+.btn-eye { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #aaa; cursor: pointer; font-size: 16px; padding: 5px; }
+.btn-eye:hover { color: #FFD700; }
+
 @media (max-width: 768px) {
   .sidebar { transform: translateX(100%); }
   .sidebar.active { transform: translateX(0); }

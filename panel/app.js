@@ -220,6 +220,13 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('active');
 }
 
+function togglePass(id, btn) {
+  const inp = document.getElementById(id);
+  const icon = btn.querySelector('i');
+  if (inp.type === 'password') { inp.type = 'text'; icon.className = 'fas fa-eye-slash'; }
+  else { inp.type = 'password'; icon.className = 'fas fa-eye'; }
+}
+
 // Navigation
 document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => {
