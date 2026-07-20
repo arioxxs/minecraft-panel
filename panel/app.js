@@ -212,6 +212,11 @@ function updateStatus(s) {
   document.getElementById('dashPlayerList').innerHTML = s.players.length ? s.players.map(p => '<div style="padding:8px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px">' + p + '</div>').join('') : 'هیچ بازیکنی آنلاین نیست';
 }
 
+// Close sidebar on mobile
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('active');
+}
+
 // Navigation
 document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => {
@@ -226,6 +231,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     if (pg === 'logs') loadLogs();
     if (pg === 'config') loadConfig();
     if (pg === 'backups') loadBackups();
+    if (window.innerWidth <= 768) closeSidebar();
   });
 });
 

@@ -157,6 +157,8 @@ body {
 }
 .sidebar-header .logo-icon { width: 40px; height: 40px; background: var(--mc-green); border: 3px solid #000; display: flex; align-items: center; justify-content: center; box-shadow: inset -2px -2px 0 #2A5A14, inset 2px 2px 0 #7AAC5E; }
 
+.btn-close-sidebar { display: none; margin-right: auto; background: var(--mc-danger); border: 3px solid #000; color: white; width: 36px; height: 36px; font-size: 18px; cursor: pointer; box-shadow: inset -2px -2px 0 #5A1616, inset 2px 2px 0 #E85454; }
+
 .user-info { padding: 15px; display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #333; }
 .user-avatar { width: 45px; height: 45px; background: var(--mc-green); border: 3px solid #000; display: flex; align-items: center; justify-content: center; box-shadow: inset -2px -2px 0 #2A5A14, inset 2px 2px 0 #7AAC5E; }
 .user-details { display: flex; flex-direction: column; }
@@ -264,5 +266,9 @@ body {
   .sidebar.active { transform: translateX(0); }
   .main-content { margin-right: 0; }
   .btn-toggle-sidebar { display: block; }
+  .btn-close-sidebar { display: block; }
+  .sidebar-header { justify-content: space-between; }
   .grid-2 { grid-template-columns: 1fr; }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+  .sidebar.active ~ .sidebar-overlay { display: block; }
 }
