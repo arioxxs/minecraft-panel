@@ -254,7 +254,7 @@ async function srvAction(action) {
   } catch { toast('خطا', 'error'); }
 }
 
-function quickCmd(cmd) { api('/api/command', { command: cmd }).then(d => toast(d.success ? 'انجام شد' : 'خطا', d.success ? 'success' : 'error')); }
+function quickCmd(cmd) { api('/api/command', { command: cmd }).then(d => { if (d.success) toast('انجام شد: ' + cmd, 'success'); else toast('خطا: ' + (d.error || 'RCON قطعه'), 'error'); }); }
 
 // Players
 function plrCmd(action) {
