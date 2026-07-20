@@ -209,7 +209,10 @@ function updateStatus(s) {
   document.getElementById('dashMem').textContent = (s.memory.used || 0) + 'MB';
   document.getElementById('navPlayers').textContent = s.players.length + ' بازیکن';
   document.getElementById('navTps').textContent = 'TPS: ' + (s.tps ? s.tps.toFixed(1) : '--');
-  document.getElementById('dashPlayerList').innerHTML = s.players.length ? s.players.map(p => '<div style="padding:8px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px">' + p + '</div>').join('') : 'هیچ بازیکنی آنلاین نیست';
+  const plHtml = s.players.length ? s.players.map(p => '<div style="padding:8px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px;cursor:pointer" onclick="document.getElementById(\'targetPlayer\').value=\'' + p + '\'">' + p + '</div>').join('') : 'هیچ بازیکنی آنلاین نیست';
+  document.getElementById('dashPlayerList').innerHTML = plHtml;
+  const opEl = document.getElementById('onlinePlayers');
+  if (opEl) opEl.innerHTML = plHtml;
 }
 
 // Close sidebar on mobile
