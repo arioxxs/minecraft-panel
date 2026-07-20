@@ -27,7 +27,11 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'), err => {
+    if (err) res.json({ status: 'ok', message: 'MC Panel Backend' });
+  });
+});
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -44,6 +48,7 @@ const BACKUP_DIR = path.join(MC_SERVER_DIR, 'backups');
 const PLUGINS_DIR = path.join(MC_SERVER_DIR, 'plugins');
 
 let rcon = null;
+let rconRetries = 0;
 let serverStatus = {
   online: false,
   players: [],
@@ -54,6 +59,7 @@ let serverStatus = {
 };
 
 async function connectRcon() {
+  if (rconRetries > 3) return;
   try {
     rcon = await Rcon.connect({
       host: process.env.MC_HOST || 'localhost',
@@ -61,6 +67,7 @@ async function connectRcon() {
       password: process.env.MC_RCON_PASSWORD || 'minecraft123'
     });
     console.log('RCON Connected');
+    rconRetries = 0;
     serverStatus.online = true;
     io.emit('serverStatus', serverStatus);
     
@@ -68,12 +75,15 @@ async function connectRcon() {
       console.log('RCON Disconnected');
       serverStatus.online = false;
       io.emit('serverStatus', serverStatus);
+      rconRetries = 0;
       setTimeout(connectRcon, 5000);
     });
   } catch (err) {
-    console.log('RCON Connection failed, retrying in 5s...');
-    serverStatus.online = false;
-    setTimeout(connectRcon, 5000);
+    rconRetries++;
+    if (rconRetries <= 3) {
+      console.log('RCON Connection failed (attempt ' + rconRetries + '/3)');
+      setTimeout(connectRcon, 10000);
+    }
   }
 }
 
