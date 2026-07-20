@@ -2,7 +2,7 @@
 
 mkdir -p /data
 
-FORGE_VERSION="1.21.11-61.1.9"
+FORGE_VERSION="1.21.11-61.0.8"
 FORGE_URL="https://maven.minecraftforge.net/net/minecraftforge/forge/${FORGE_VERSION}/forge-${FORGE_VERSION}-installer.jar"
 
 echo "Downloading Forge ${FORGE_VERSION}..."
