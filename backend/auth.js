@@ -73,9 +73,10 @@ function requirePermission(permission) {
     }
 
     const db = getDb();
-    const hasPermission = db.prepare(
-      'SELECT id FROM permissions WHERE role = ? AND permission = ?'
-    ).get(req.user.role, permission);
+    const hasPermission = dbGet(db,
+      'SELECT id FROM permissions WHERE role = ? AND permission = ?',
+      [req.user.role, permission]
+    );
 
     if (!hasPermission) {
       return res.status(403).json({ error: 'Insufficient permissions' });

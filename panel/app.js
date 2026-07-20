@@ -55,9 +55,10 @@ function showAuthOk(msg) {
 }
 
 // Auth API
-async function api(path, body) {
-  const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
+async function api(path, body, method) {
+  const m = method || (body ? 'POST' : 'GET');
+  const opts = { method: m, headers: { 'Content-Type': 'application/json' } };
+  if (body && m !== 'DELETE') opts.body = JSON.stringify(body);
   if (token) opts.headers['Authorization'] = 'Bearer ' + token;
   const r = await fetch(API + path, opts);
   return r.json();
@@ -325,7 +326,7 @@ async function loadUsers() {
 async function changeRole(id) {
   const r = prompt('نقش جدید (owner/admin/moderator/user):');
   if (!r) return;
-  try { await api('/api/users/' + id + '/role', { role: r }); loadUsers(); toast('نقش تغییر کرد', 'success'); } catch { toast('خطا', 'error'); }
+  try { await api('/api/users/' + id + '/role', { role: r }, 'PUT'); loadUsers(); toast('نقش تغییر کرد', 'success'); } catch { toast('خطا', 'error'); }
 }
 
 async function warnUser(id) {
@@ -350,7 +351,7 @@ async function unbanUser(id) {
 
 async function deleteUser(id) {
   if (!confirm('آیا از حذف این کاربر مطمئن هستید؟')) return;
-  try { await api('/api/users/' + id, { method: 'DELETE' }); loadUsers(); toast('کاربر حذف شد', 'success'); } catch { toast('خطا', 'error'); }
+  try { await api('/api/users/' + id, null, 'DELETE'); loadUsers(); toast('کاربر حذف شد', 'success'); } catch { toast('خطا', 'error'); }
 }
 
 // Logs

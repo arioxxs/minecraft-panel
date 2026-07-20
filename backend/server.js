@@ -11,7 +11,7 @@ const { Rcon } = require('rcon-client');
 const schedule = require('node-schedule');
 const archiver = require('archiver');
 const { initDatabase, getDb, saveDatabase } = require('./database');
-const { authenticate, requireRole, logActivity } = require('./auth');
+const { authenticate, requireRole, logActivity, verifyToken } = require('./auth');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -59,7 +59,6 @@ let serverStatus = {
 };
 
 async function connectRcon() {
-  if (rconRetries > 3) return;
   try {
     rcon = await Rcon.connect({
       host: process.env.MC_HOST || 'localhost',
@@ -74,16 +73,15 @@ async function connectRcon() {
     rcon.on('end', () => {
       console.log('RCON Disconnected');
       serverStatus.online = false;
+      rcon = null;
       io.emit('serverStatus', serverStatus);
-      rconRetries = 0;
       setTimeout(connectRcon, 5000);
     });
   } catch (err) {
     rconRetries++;
-    if (rconRetries <= 3) {
-      console.log('RCON Connection failed (attempt ' + rconRetries + '/3)');
-      setTimeout(connectRcon, 10000);
-    }
+    const delay = rconRetries <= 3 ? 10000 : 30000;
+    console.log('RCON Connection failed (attempt ' + rconRetries + '), retry in ' + (delay/1000) + 's');
+    setTimeout(connectRcon, delay);
   }
 }
 
@@ -515,9 +513,15 @@ io.on('connection', (socket) => {
   console.log('Client connected');
   socket.emit('serverStatus', serverStatus);
   
-  socket.on('executeCommand', async (cmd) => {
+  socket.on('executeCommand', async (data) => {
     try {
-      const response = await executeCommand(cmd);
+      const token = data && data.token;
+      if (!token) return socket.emit('commandResponse', { success: false, error: 'Authentication required' });
+      const decoded = verifyToken(token);
+      if (!decoded) return socket.emit('commandResponse', { success: false, error: 'Invalid token' });
+      if (!['owner', 'admin', 'moderator'].includes(decoded.role)) return socket.emit('commandResponse', { success: false, error: 'Insufficient permissions' });
+      const cmd = data.command || data;
+      const response = await executeCommand(typeof cmd === 'string' ? cmd : JSON.stringify(cmd));
       socket.emit('commandResponse', { success: true, response });
     } catch (err) {
       socket.emit('commandResponse', { success: false, error: err.message });
