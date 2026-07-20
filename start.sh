@@ -2,12 +2,15 @@
 
 mkdir -p /data
 
-echo "Paper 1.16.5 build 794..."
-curl -L --retry 3 --retry-delay 5 -o /data/server.jar \
-  "https://fill-data.papermc.io/v1/objects/e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276/paper-1.16.5-794.jar"
+if [ ! -f /data/server.jar ] || [ $(wc -c < /data/server.jar 2>/dev/null || echo 0) -lt 10000000 ]; then
+  echo "Paper 1.16.5 build 794..."
+  rm -f /data/server.jar
+  curl -L --retry 3 --retry-delay 5 -o /data/server.jar \
+    "https://fill-data.papermc.io/v1/objects/e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276/paper-1.16.5-794.jar"
+fi
 
 FILE_SIZE=$(wc -c < /data/server.jar 2>/dev/null || echo 0)
-echo "Downloaded: ${FILE_SIZE} bytes"
+echo "Server jar: ${FILE_SIZE} bytes"
 
 if [ "$FILE_SIZE" -lt 10000000 ]; then
   echo "ERROR: Download failed"
