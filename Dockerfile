@@ -1,6 +1,6 @@
-FROM openjdk:11-jre-alpine
+FROM node:18-alpine
 
-RUN apk add --no-cache nodejs npm curl wget bash netcat-openbsd
+RUN apk add --no-cache openjdk11-jre curl wget bash netcat-openbsd
 
 RUN mkdir -p /data /app
 
