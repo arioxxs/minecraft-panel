@@ -22,6 +22,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
@@ -50,6 +51,7 @@ const PLUGINS_DIR = path.join(MC_SERVER_DIR, 'plugins');
 
 let rcon = null;
 let rconRetries = 0;
+let rconConnecting = false;
 let serverStatus = {
   online: false,
   players: [],
@@ -60,6 +62,8 @@ let serverStatus = {
 };
 
 async function connectRcon() {
+  if (rconConnecting) return;
+  rconConnecting = true;
   try {
     rcon = await Rcon.connect({
       host: process.env.MC_HOST || 'localhost',
@@ -75,13 +79,16 @@ async function connectRcon() {
       console.log('RCON Disconnected');
       serverStatus.online = false;
       rcon = null;
+      rconConnecting = false;
       io.emit('serverStatus', serverStatus);
       setTimeout(connectRcon, 5000);
     });
   } catch (err) {
+    rcon = null;
     rconRetries++;
     const delay = rconRetries <= 3 ? 10000 : 30000;
     console.log('RCON Connection failed (attempt ' + rconRetries + '), retry in ' + (delay/1000) + 's');
+    rconConnecting = false;
     setTimeout(connectRcon, delay);
   }
 }

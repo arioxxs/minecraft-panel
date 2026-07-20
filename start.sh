@@ -56,4 +56,16 @@ PANEL_PID=$!
 
 echo "=== Panel: port 5000 | Minecraft: port 25565 ==="
 
-wait $MC_PID $PANEL_PID
+trap "kill $MC_PID $PANEL_PID 2>/dev/null; exit" SIGTERM SIGINT
+
+while true; do
+  if ! kill -0 $MC_PID 2>/dev/null; then
+    echo "MC server stopped, restarting..."
+    cd /data
+    java -Xms256M -Xmx512M -jar /data/server.jar --nogui &
+    MC_PID=$!
+    sleep 30
+    cd /app/backend
+  fi
+  sleep 5
+done
