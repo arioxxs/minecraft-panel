@@ -26,6 +26,9 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200
@@ -519,11 +522,15 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
-  await initDatabase();
+  try {
+    await initDatabase();
+  } catch(e) {
+    console.error('Database init error:', e.message);
+  }
   
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Panel server running on port ${PORT}`);
-    connectRcon();
+    try { connectRcon(); } catch(e) { console.log('RCON skip:', e.message); }
   });
 }
 
@@ -539,6 +546,6 @@ setInterval(async () => {
       }
     } catch (err) {}
   }
-  io.emit('serverStatus', serverStatus);
-  saveDatabase();
-}, 5000);
+  try { io.emit('serverStatus', serverStatus); } catch(e) {}
+  try { saveDatabase(); } catch(e) {}
+}, 10000);
