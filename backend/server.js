@@ -10,7 +10,7 @@ const fs = require('fs-extra');
 const { Rcon } = require('rcon-client');
 const schedule = require('node-schedule');
 const archiver = require('archiver');
-const { initDatabase, getDb } = require('./database');
+const { initDatabase, getDb, saveDatabase } = require('./database');
 const { authenticate, requireRole, logActivity } = require('./auth');
 
 const authRoutes = require('./routes/auth');
@@ -20,8 +20,6 @@ const logRoutes = require('./routes/logs');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
-
-initDatabase();
 
 app.use(cors());
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -519,10 +517,17 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Panel server running on port ${PORT}`);
-  connectRcon();
-});
+
+async function startServer() {
+  await initDatabase();
+  
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Panel server running on port ${PORT}`);
+    connectRcon();
+  });
+}
+
+startServer();
 
 setInterval(async () => {
   if (serverStatus.online) {
@@ -535,4 +540,5 @@ setInterval(async () => {
     } catch (err) {}
   }
   io.emit('serverStatus', serverStatus);
+  saveDatabase();
 }, 5000);

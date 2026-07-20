@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { getDb } = require('./database');
+const { dbGet } = require('./dbHelper');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'mc-panel-secret-key';
 
@@ -35,7 +36,7 @@ function authenticate(req, res, next) {
   }
 
   const db = getDb();
-  const user = db.prepare('SELECT id, username, email, display_name, role, status, avatar FROM users WHERE id = ?').get(decoded.id);
+  const user = dbGet(db, 'SELECT id, username, email, display_name, role, status, avatar FROM users WHERE id = ?', [decoded.id]);
   
   if (!user) {
     return res.status(401).json({ error: 'User not found' });
@@ -86,9 +87,9 @@ function requirePermission(permission) {
 function logActivity(userId, action, details, ipAddress) {
   const db = getDb();
   const { v4: uuidv4 } = require('uuid');
-  db.prepare(
-    'INSERT INTO activity_log (id, user_id, action, details, ip_address) VALUES (?, ?, ?, ?, ?)'
-  ).run(uuidv4(), userId, action, details, ipAddress);
+  const { dbRun } = require('./dbHelper');
+  dbRun(db, 'INSERT INTO activity_log (id, user_id, action, details, ip_address) VALUES (?, ?, ?, ?, ?)',
+    [uuidv4(), userId, action, details, ipAddress]);
 }
 
 module.exports = { 
