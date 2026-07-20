@@ -1,745 +1,329 @@
-const API_URL = '';
-let socket = null;
-let commandHistory = [];
-let currentPage = 'dashboard';
-let serverData = {
-    online: false,
-    players: [],
-    tps: 20,
-    memory: { used: 0, max: 0 },
-    uptime: 0,
-    version: 'unknown'
-};
+let token = localStorage.getItem('mc_token');
+let currentUser = null;
+let resetToken = null;
+const API = '';
 
-// Login
-function login() {
-    const password = document.getElementById('loginPassword').value;
-    fetch(`${API_URL}/api/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
-            initSocket();
-            loadAllData();
-            showToast('با موفقیت وارد شدید');
-        } else {
-            document.getElementById('loginError').textContent = 'رمز عبور اشتباه است';
-        }
-    })
-    .catch(err => {
-        document.getElementById('loginError').textContent = 'خطا در اتصال به سرور';
-    });
+// Toast
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  setTimeout(() => t.className = 'toast hidden', 3000);
 }
 
-function logout() {
-    document.getElementById('loginScreen').classList.remove('hidden');
-    document.getElementById('mainApp').classList.add('hidden');
-    document.getElementById('loginPassword').value = '';
+function showEl(id, show) {
+  document.getElementById(id).classList.toggle('hidden', !show);
+}
+
+// Loading
+window.addEventListener('load', () => {
+  let p = 0;
+  const bar = document.getElementById('loadBar');
+  const txt = document.getElementById('loadText');
+  const texts = ['در حال بارگذاری...', 'آماده‌سازی...', 'تقریباً آماده...'];
+  const iv = setInterval(() => {
+    p += Math.random() * 35;
+    if (p > 100) p = 100;
+    bar.style.width = p + '%';
+    txt.textContent = texts[Math.floor(p / 34)] || texts[2];
+    if (p >= 100) {
+      clearInterval(iv);
+      setTimeout(() => {
+        document.getElementById('loadingScreen').style.display = 'none';
+        if (token) checkAuth();
+        else showEl('loginScreen', true);
+      }, 400);
+    }
+  }, 250);
+});
+
+// Tabs
+function showTab(tab) {
+  ['login', 'register', 'forgot', 'reset'].forEach(t => showEl('tab-' + t, t === tab));
+  document.querySelectorAll('.login-tab').forEach((el, i) => el.classList.toggle('active', ['login', 'register'][i] === tab));
+  document.getElementById('authError').style.display = 'none';
+  document.getElementById('authSuccess').style.display = 'none';
+}
+
+function showAuthErr(msg) {
+  const e = document.getElementById('authError');
+  e.textContent = msg; e.style.display = 'block';
+}
+function showAuthOk(msg) {
+  const s = document.getElementById('authSuccess');
+  s.textContent = msg; s.style.display = 'block';
+}
+
+// Auth API
+async function api(path, body) {
+  const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(API + path, opts);
+  return r.json();
+}
+
+async function apiGet(path) {
+  const opts = { headers: {} };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(API + path, opts);
+  return r.json();
+}
+
+async function checkAuth() {
+  try {
+    const d = await apiGet('/api/auth/me');
+    if (d.user) {
+      currentUser = d.user;
+      enterApp();
+    } else {
+      showEl('loginScreen', true);
+    }
+  } catch { showEl('loginScreen', true); }
+}
+
+async function doLogin() {
+  const u = document.getElementById('loginUser').value;
+  const p = document.getElementById('loginPass').value;
+  if (!u || !p) return showAuthErr('همه فیلدها را پر کنید');
+  try {
+    const d = await api('/api/auth/login', { username: u, password: p });
+    if (d.error) return showAuthErr(d.error);
+    token = d.token; localStorage.setItem('mc_token', token);
+    currentUser = d.user; enterApp();
+  } catch { showAuthErr('خطا در اتصال'); }
+}
+
+async function doRegister() {
+  const u = document.getElementById('regUser').value;
+  const e = document.getElementById('regEmail').value;
+  const n = document.getElementById('regName').value;
+  const p = document.getElementById('regPass').value;
+  const p2 = document.getElementById('regPass2').value;
+  if (!u || !p) return showAuthErr('نام کاربری و رمز الزامی است');
+  if (p !== p2) return showAuthErr('رمزها مطابقت ندارند');
+  if (p.length < 6) return showAuthErr('رمز باید حداقل 6 کاراکتر باشد');
+  try {
+    const d = await api('/api/auth/register', { username: u, email: e, password: p, display_name: n || u });
+    if (d.error) return showAuthErr(d.error);
+    token = d.token; localStorage.setItem('mc_token', token);
+    currentUser = d.user; enterApp();
+  } catch { showAuthErr('خطا در اتصال'); }
+}
+
+async function doForgot() {
+  const e = document.getElementById('forgotEmail').value;
+  if (!e) return showAuthErr('ایمیل را وارد کنید');
+  try {
+    const d = await api('/api/auth/forgot-password', { email: e });
+    if (d.resetToken) resetToken = d.resetToken;
+    showAuthOk('لینک بازیابی ارسال شد');
+    setTimeout(() => showTab('reset'), 1500);
+  } catch { showAuthErr('خطا در اتصال'); }
+}
+
+async function doReset() {
+  const p = document.getElementById('resetPass').value;
+  const p2 = document.getElementById('resetPass2').value;
+  if (!p || !p2) return showAuthErr('فیلدها را پر کنید');
+  if (p !== p2) return showAuthErr('رمزها مطابقت ندارند');
+  if (!resetToken) return showAuthErr('ابتدا لینک بازیابی را دریافت کنید');
+  try {
+    const d = await api('/api/auth/reset-password', { token: resetToken, newPassword: p });
+    if (d.error) return showAuthErr(d.error);
+    showAuthOk('رمز با موفقیت تغییر کرد');
+    setTimeout(() => showTab('login'), 1500);
+  } catch { showAuthErr('خطا در اتصال'); }
+}
+
+function googleLogin() {
+  toast('Google login requires setup', 'error');
+}
+
+// Enter App
+function enterApp() {
+  showEl('loginScreen', false);
+  showEl('mainApp', true);
+  document.getElementById('dispName').textContent = currentUser.display_name || currentUser.username;
+  document.getElementById('dispRole').textContent = currentUser.role;
+  initSocket();
+  loadDashboard();
+}
+
+function doLogout() {
+  token = null; currentUser = null;
+  localStorage.removeItem('mc_token');
+  showEl('mainApp', false);
+  showEl('loginScreen', true);
 }
 
 // Socket
+let socket;
 function initSocket() {
-    socket = io();
-    
-    socket.on('connect', () => {
-        addConsoleLine('[SYSTEM] اتصال برقرار شد', 'system');
-    });
-    
-    socket.on('serverStatus', (status) => {
-        serverData = status;
-        updateDashboard();
-    });
-    
-    socket.on('consoleOutput', (data) => {
-        addConsoleLine(`[${data.type}] ${data.command}: ${data.response}`);
-    });
-    
-    socket.on('commandResponse', (data) => {
-        if (data.success) {
-            addConsoleLine(data.response, 'info');
-        } else {
-            addConsoleLine(`خطا: ${data.error}`, 'error');
-        }
-    });
-    
-    socket.on('disconnect', () => {
-        addConsoleLine('[SYSTEM] اتصال قطع شد', 'error');
-    });
+  socket = io();
+  socket.on('serverStatus', updateStatus);
+  socket.on('consoleOutput', d => addConsole('[' + d.user + '] ' + d.command));
+}
+
+function updateStatus(s) {
+  const on = s.online;
+  document.getElementById('statusDot').className = 'status-dot ' + (on ? 'online' : 'offline');
+  document.getElementById('statusText').textContent = on ? 'آنلاین' : 'آفلاین';
+  document.getElementById('dashStatus').textContent = on ? 'آنلاین' : 'آفلاین';
+  document.getElementById('dashPlayers').textContent = s.players.length + '/20';
+  document.getElementById('dashTps').textContent = s.tps ? s.tps.toFixed(1) : '--';
+  document.getElementById('dashMem').textContent = (s.memory.used || 0) + 'MB';
+  document.getElementById('navPlayers').textContent = s.players.length + ' بازیکن';
+  document.getElementById('navTps').textContent = 'TPS: ' + (s.tps ? s.tps.toFixed(1) : '--');
+  document.getElementById('dashPlayerList').innerHTML = s.players.length ? s.players.map(p => '<div style="padding:8px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px">' + p + '</div>').join('') : 'هیچ بازیکنی آنلاین نیست';
 }
 
 // Navigation
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-        const page = item.dataset.page;
-        navigateTo(page);
-    });
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const pg = el.dataset.page;
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + pg).classList.add('active');
+    const titles = { dashboard: 'داشبورد', players: 'بازیکنان', console: 'کنسول', users: 'مدیریت کاربران', plugins: 'پلاگین‌ها', worlds: 'جهان‌ها', backups: 'بکاپ‌ها', config: 'تنظیمات', logs: 'لاگ فعالیت' };
+    document.getElementById('pageTitle').textContent = titles[pg] || pg;
+    if (pg === 'users') loadUsers();
+    if (pg === 'logs') loadLogs();
+    if (pg === 'config') loadConfig();
+    if (pg === 'backups') loadBackups();
+  });
 });
 
-function navigateTo(page) {
-    currentPage = page;
-    
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    document.querySelector(`[data-page="${page}"]`).classList.add('active');
-    
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(`page-${page}`).classList.add('active');
-    
-    document.getElementById('pageTitle').textContent = getPageTitle(page);
-    
-    loadPageData(page);
-}
-
-function getPageTitle(page) {
-    const titles = {
-        dashboard: 'داشبورد',
-        players: 'بازیکنان',
-        console: 'کنسول',
-        plugins: 'پلاگین‌ها',
-        worlds: 'جهان‌ها',
-        backups: 'بکاپ‌ها',
-        config: 'تنظیمات',
-        scheduler: 'زمان‌بندی',
-        logs: 'لاگ‌ها'
-    };
-    return titles[page] || page;
-}
-
-// Load Data
-function loadAllData() {
-    updateDashboard();
-    loadPageData(currentPage);
-}
-
-function loadPageData(page) {
-    switch(page) {
-        case 'dashboard':
-            updateDashboard();
-            break;
-        case 'players':
-            loadPlayers();
-            loadOps();
-            loadWhitelist();
-            loadBans();
-            break;
-        case 'console':
-            break;
-        case 'plugins':
-            loadPlugins();
-            break;
-        case 'worlds':
-            loadWorlds();
-            break;
-        case 'backups':
-            loadBackups();
-            break;
-        case 'config':
-            loadConfig();
-            break;
-        case 'scheduler':
-            loadSchedules();
-            break;
-        case 'logs':
-            loadLogs();
-            break;
-    }
-}
-
 // Dashboard
-function updateDashboard() {
-    const status = serverData.online ? 'آنلاین' : 'آفلاین';
-    document.getElementById('dashStatus').textContent = status;
-    document.getElementById('dashPlayers').textContent = `${serverData.players.length}/20`;
-    document.getElementById('dashTps').textContent = serverData.tps.toFixed(1);
-    document.getElementById('dashMemory').textContent = `${serverData.memory.used}MB`;
-    document.getElementById('dashVersion').textContent = serverData.version || '1.21.5';
-    
-    const statusBadge = document.getElementById('serverStatusBadge');
-    const dot = statusBadge.querySelector('.status-dot');
-    const text = statusBadge.querySelector('span:last-child');
-    
-    if (serverData.online) {
-        dot.classList.remove('offline');
-        dot.classList.add('online');
-        text.textContent = 'آنلاین';
-    } else {
-        dot.classList.remove('online');
-        dot.classList.add('offline');
-        text.textContent = 'آفلاین';
-    }
-    
-    document.getElementById('playerCountNav').textContent = `${serverData.players.length} بازیکن`;
-    document.getElementById('tpsNav').textContent = `TPS: ${serverData.tps.toFixed(1)}`;
-    
-    updatePlayerGrid();
-}
-
-function updatePlayerGrid() {
-    const container = document.getElementById('dashPlayerList');
-    if (serverData.players.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>هیچ بازیکنی آنلاین نیست</p></div>';
-        return;
-    }
-    
-    container.innerHTML = serverData.players.map(player => `
-        <div class="player-item">
-            <div class="player-name">${player}</div>
-            <div class="player-actions">
-                <button onclick="quickPlayerAction('kick', '${player}')" class="btn btn-sm btn-warning" title="اخراج">
-                    <i class="fas fa-shoe-prints"></i>
-                </button>
-                <button onclick="quickPlayerAction('tp', '${player}')" class="btn btn-sm btn-primary" title="تلپورت">
-                    <i class="fas fa-exchange-alt"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Players
-function loadPlayers() {
-    fetch(`${API_URL}/api/players`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('onlinePlayersList');
-        if (data.players.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>هیچ بازیکنی آنلاین نیست</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.players.map(player => `
-            <div class="player-list-item">
-                <span><i class="fas fa-user" style="margin-left: 8px;"></i>${player}</span>
-                <div style="display: flex; gap: 5px;">
-                    <button onclick="executePlayerCmd('kick ${player}')" class="btn btn-sm btn-warning">اخراج</button>
-                    <button onclick="executePlayerCmd('ban ${player}')" class="btn btn-sm btn-danger">مسدود</button>
-                    <button onclick="executePlayerCmd('op ${player}')" class="btn btn-sm btn-info">OP</button>
-                    <button onclick="executePlayerCmd('gamemode creative ${player}')" class="btn btn-sm btn-outline">خلاقیت</button>
-                </div>
-            </div>
-        `).join('');
-    });
-}
-
-function loadOps() {
-    fetch(`${API_URL}/api/ops`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('opsList');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-user-shield"></i><p>هیچ اوپراتوری وجود ندارد</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(op => `
-            <div class="player-list-item">
-                <span><i class="fas fa-crown" style="margin-left: 8px; color: #eab308;"></i>${op.name}</span>
-                <button onclick="executePlayerCmd('deop ${op.name}')" class="btn btn-sm btn-danger">حذف OP</button>
-            </div>
-        `).join('');
-    });
-}
-
-function loadWhitelist() {
-    fetch(`${API_URL}/api/whitelist`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('whitelistContent');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-list"></i><p>لیست سفید خالی است</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(player => `
-            <div class="player-list-item">
-                <span><i class="fas fa-check-circle" style="margin-left: 8px; color: #22c55e;"></i>${player.name}</span>
-                <button onclick="executePlayerCmd('whitelist remove ${player.name}')" class="btn btn-sm btn-danger">حذف</button>
-            </div>
-        `).join('');
-    });
-}
-
-function loadBans() {
-    fetch(`${API_URL}/api/bans`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('bansList');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-ban"></i><p>هیچ بازیکن مسدودی وجود ندارد</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(ban => `
-            <div class="player-list-item">
-                <span><i class="fas fa-ban" style="margin-left: 8px; color: #ef4444;"></i>${ban.name} - ${ban.reason || 'بدون دلیل'}</span>
-                <button onclick="executePlayerCmd('pardon ${ban.name}')" class="btn btn-sm btn-success">رفع مسدودیت</button>
-            </div>
-        `).join('');
-    });
-}
-
-function addOp() {
-    const player = document.getElementById('addOpInput').value;
-    if (player) {
-        executePlayerCmd(`op ${player}`);
-        document.getElementById('addOpInput').value = '';
-    }
-}
-
-function addToWhitelist() {
-    const player = document.getElementById('addWhitelistInput').value;
-    if (player) {
-        executePlayerCmd(`whitelist add ${player}`);
-        document.getElementById('addWhitelistInput').value = '';
-    }
-}
-
-function addBan() {
-    const player = document.getElementById('addBanInput').value;
-    const reason = document.getElementById('banReasonInput').value;
-    if (player) {
-        executePlayerCmd(`ban ${player} ${reason || ''}`);
-        document.getElementById('addBanInput').value = '';
-        document.getElementById('banReasonInput').value = '';
-    }
-}
-
-function playerAction(action) {
-    const player = document.getElementById('targetPlayer').value;
-    if (!player) {
-        showToast('نام بازیکن را وارد کنید', true);
-        return;
-    }
-    
-    if (action === 'tp') {
-        const target = prompt('نام بازیکن مقصد:');
-        if (target) {
-            executePlayerCmd(`tp ${player} ${target}`);
-        }
-    } else if (action.startsWith('gamemode')) {
-        const mode = action.split(' ')[1];
-        executePlayerCmd(`gamemode ${mode} ${player}`);
-    } else {
-        executePlayerCmd(`${action} ${player}`);
-    }
-}
-
-function quickPlayerAction(action, player) {
-    executePlayerCmd(`${action} ${player}`);
-}
-
-function executePlayerCmd(cmd) {
-    sendCommand(cmd);
-    showToast(`دستور اجرا شد: ${cmd}`);
-    setTimeout(() => {
-        loadPlayers();
-        loadOps();
-        loadWhitelist();
-        loadBans();
-    }, 1000);
-}
-
-// Console
-function sendConsoleCommand() {
-    const input = document.getElementById('consoleInput');
-    const cmd = input.value.trim();
-    if (!cmd) return;
-    
-    commandHistory.unshift(cmd);
-    if (commandHistory.length > 50) commandHistory.pop();
-    
-    addConsoleLine(`> ${cmd}`);
-    sendCommand(cmd);
-    input.value = '';
-    
-    updateCommandHistory();
-}
-
-function presetCmd(cmd) {
-    document.getElementById('consoleInput').value = cmd;
-    sendConsoleCommand();
-}
-
-function addConsoleLine(text, type = 'normal') {
-    const console = document.getElementById('consoleOutput');
-    const line = document.createElement('div');
-    line.className = `console-${type}`;
-    line.textContent = text;
-    console.appendChild(line);
-    
-    if (document.getElementById('autoScroll').checked) {
-        console.scrollTop = console.scrollHeight;
-    }
-}
-
-function clearConsole() {
-    document.getElementById('consoleOutput').innerHTML = '<div class="console-line">[SYSTEM] کنسول پاک شد</div>';
-}
-
-function updateCommandHistory() {
-    const container = document.getElementById('commandHistory');
-    container.innerHTML = commandHistory.map(cmd => `
-        <div class="command-history-item">
-            <span>${cmd}</span>
-            <button onclick="presetCmd('${cmd}')" class="btn btn-sm btn-outline">اجرا</button>
-        </div>
-    `).join('');
-}
-
-// Plugins
-function loadPlugins() {
-    fetch(`${API_URL}/api/plugins`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('pluginsList');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-puzzle-piece"></i><p>هیچ پلاگینی نصب نشده</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(plugin => `
-            <div class="plugin-card">
-                <h4><i class="fas fa-puzzle-piece"></i> ${plugin.name}</h4>
-                <div class="plugin-meta">
-                    <span>حجم: ${formatSize(plugin.size)}</span>
-                    <span>${new Date(plugin.modified).toLocaleDateString('fa-IR')}</span>
-                </div>
-            </div>
-        `).join('');
-    });
-}
-
-function refreshPlugins() {
-    loadPlugins();
-    showToast('لیست پلاگین‌ها بروزرسانی شد');
-}
-
-// Worlds
-function loadWorlds() {
-    fetch(`${API_URL}/api/worlds`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('worldsList');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-globe-americas"></i><p>هیچ جهانی یافت نشد</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(world => `
-            <div class="world-card">
-                <h4><i class="fas fa-globe-americas"></i> ${world.name}</h4>
-                <div class="world-info">
-                    <div class="world-info-item">
-                        <span>حجم:</span>
-                        <span>${formatSize(world.size)}</span>
-                    </div>
-                    <div class="world-info-item">
-                        <span>آخرین تغییر:</span>
-                        <span>${new Date(world.lastModified).toLocaleDateString('fa-IR')}</span>
-                    </div>
-                </div>
-                <button onclick="backupWorld('${world.name}')" class="btn btn-sm btn-primary">
-                    <i class="fas fa-cloud-upload-alt"></i> بکاپ
-                </button>
-            </div>
-        `).join('');
-    });
-}
-
-function refreshWorlds() {
-    loadWorlds();
-    showToast('لیست جهان‌ها بروزرسانی شد');
-}
-
-function backupWorld(name) {
-    fetch(`${API_URL}/api/world/backup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showToast('بکاپ جهان با موفقیت ایجاد شد');
-        } else {
-            showToast('خطا در ایجاد بکاپ', true);
-        }
-    });
-}
-
-// Backups
-function loadBackups() {
-    fetch(`${API_URL}/api/backups`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('backupsList');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-cloud-upload-alt"></i><p>هیچ بکاپی وجود ندارد</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(backup => `
-            <div class="backup-item">
-                <div class="backup-info">
-                    <h4><i class="fas fa-file-archive"></i> ${backup.name}</h4>
-                    <div class="backup-meta">
-                        <span>حجم: ${formatSize(backup.size)}</span>
-                        <span>تاریخ: ${new Date(backup.created).toLocaleDateString('fa-IR')}</span>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    });
-}
-
-function createBackup() {
-    fetch(`${API_URL}/api/server/backup`, { method: 'POST' })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showToast('بکاپ با موفقیت ایجاد شد');
-            loadBackups();
-        } else {
-            showToast('خطا در ایجاد بکاپ', true);
-        }
-    });
-}
-
-// Config
-function loadConfig() {
-    fetch(`${API_URL}/api/config`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('configForm');
-        const configKeys = {
-            'server-port': 'پورت سرور',
-            'max-players': 'حداکثر بازیکنان',
-            'difficulty': 'سختی',
-            'gamemode': 'حالت بازی',
-            'pvp': 'PVP',
-            'view-distance': 'فاصله دید',
-            'simulation-distance': 'فاصله شبیه‌سازی',
-            'spawn-protection': 'محافظت اسپاون',
-            'max-world-size': 'حداکثر اندازه جهان',
-            'allow-flight': 'اجازه پرواز',
-            'white-list': 'لیست سفید',
-            'online-mode': 'حالت آنلاین',
-            'motd': 'پیام سرور',
-            'level-name': 'نام جهان',
-            'level-seeded': 'بذر جهان',
-            'level-type': 'نوع جهان',
-            'spawn-monsters': 'اسپاون هیولاها',
-            'spawn-npcs': 'اسپاون NPCها',
-            'spawn-animals': 'اسپاون حیوانات',
-            'generate-structures': 'ساختارهای تولیدی',
-            'max-tick-time': 'حداکثر تیک',
-            'network-compression-threshold': 'آستانه فشرده‌سازی',
-            'rate-limit': 'محدودیت نرخ',
-            'entity-broadcast-range-percentage': 'بُرد پخش موجودات'
-        };
-        
-        container.innerHTML = Object.entries(data).map(([key, value]) => {
-            const label = configKeys[key] || key;
-            const isBoolean = ['true', 'false'].includes(value);
-            
-            if (isBoolean) {
-                return `
-                    <div class="config-item">
-                        <label>${label}</label>
-                        <select data-key="${key}">
-                            <option value="true" ${value === 'true' ? 'selected' : ''}>فعال</option>
-                            <option value="false" ${value === 'false' ? 'selected' : ''}>غیرفعال</option>
-                        </select>
-                    </div>
-                `;
-            }
-            
-            return `
-                <div class="config-item">
-                    <label>${label}</label>
-                    <input type="text" data-key="${key}" value="${value}">
-                </div>
-            `;
-        }).join('');
-    });
-}
-
-function saveConfig() {
-    const config = {};
-    document.querySelectorAll('#configForm [data-key]').forEach(el => {
-        config[el.dataset.key] = el.value;
-    });
-    
-    fetch(`${API_URL}/api/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showToast('تنظیمات با موفقیت ذخیره شد');
-        } else {
-            showToast('خطا در ذخیره تنظیمات', true);
-        }
-    });
-}
-
-// Scheduler
-function loadSchedules() {
-    fetch(`${API_URL}/api/schedules`)
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('schedulesList');
-        if (data.length === 0) {
-            container.innerHTML = '<div class="empty-state"><i class="fas fa-clock"></i><p>هیچ زمان‌بندی وجود ندارد</p></div>';
-            return;
-        }
-        
-        container.innerHTML = data.map(schedule => `
-            <div class="schedule-item">
-                <div>
-                    <strong>${schedule.name}</strong>
-                    <p style="font-size: 12px; color: var(--text-secondary);">اجرا: ${schedule.nextRun || 'نامشخص'}</p>
-                </div>
-                <button onclick="cancelSchedule('${schedule.name}')" class="btn btn-sm btn-danger">لغو</button>
-            </div>
-        `).join('');
-    });
-}
-
-function addSchedule() {
-    const name = document.getElementById('scheduleName').value;
-    const cron = document.getElementById('scheduleCron').value;
-    const command = document.getElementById('scheduleCommand').value;
-    
-    if (!name || !cron || !command) {
-        showToast('همه فیلدها را پر کنید', true);
-        return;
-    }
-    
-    fetch(`${API_URL}/api/schedule`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, cron, command })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showToast('زمان‌بندی اضافه شد');
-            loadSchedules();
-            document.getElementById('scheduleName').value = '';
-            document.getElementById('scheduleCron').value = '';
-            document.getElementById('scheduleCommand').value = '';
-        } else {
-            showToast('خطا در اضافه کردن زمان‌بندی', true);
-        }
-    });
-}
-
-function cancelSchedule(name) {
-    fetch(`${API_URL}/api/schedule/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showToast('زمان‌بندی لغو شد');
-            loadSchedules();
-        }
-    });
-}
-
-// Logs
-function loadLogs() {
-    fetch(`${API_URL}/api/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'help' })
-    })
-    .then(res => res.json())
-    .then(data => {
-        const container = document.getElementById('logsContent');
-        container.textContent = data.response || 'لاگی موجود نیست';
-    });
-}
-
-function refreshLogs() {
-    loadLogs();
-    showToast('لاگ‌ها بروزرسانی شد');
-}
-
-function clearLogs() {
-    document.getElementById('logsContent').textContent = 'لاگ‌ها پاک شدند';
-    showToast('لاگ‌ها پاک شدند');
+async function loadDashboard() {
+  try {
+    const s = await apiGet('/api/status');
+    updateStatus(s);
+  } catch {}
 }
 
 // Server Actions
-function serverAction(action) {
-    fetch(`${API_URL}/api/server/${action}`, { method: 'POST' })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            showToast(`عملیات ${action} انجام شد`);
-        } else {
-            showToast(`خطا: ${data.error}`, true);
-        }
-    });
+async function srvAction(action) {
+  try {
+    const d = await api('/api/server/' + action, {});
+    toast(d.success ? 'انجام شد' : (d.error || 'خطا'), d.success ? 'success' : 'error');
+  } catch { toast('خطا', 'error'); }
 }
 
-function quickCmd(cmd) {
-    sendCommand(cmd);
-    showToast(`دستور اجرا شد: ${cmd}`);
+function quickCmd(cmd) { api('/api/command', { command: cmd }).then(d => toast(d.success ? 'انجام شد' : 'خطا', d.success ? 'success' : 'error')); }
+
+// Players
+function plrCmd(action) {
+  const p = document.getElementById('targetPlayer').value;
+  if (!p) return toast('نام بازیکن را وارد کنید', 'error');
+  const endpoint = action === 'pardon' ? 'player/pardon' : action === 'op' || action === 'deop' ? 'player/' + action : 'player/' + action;
+  api('/api/' + endpoint, { player: p, reason: 'By admin' }).then(d => {
+    toast(d.success ? 'انجام شد' : 'خطا', d.success ? 'success' : 'error');
+  });
 }
 
-function sendCommand(cmd) {
-    fetch(`${API_URL}/api/command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success && data.response) {
-            addConsoleLine(data.response, 'info');
-        }
-    });
+function plrGm(mode) {
+  const p = document.getElementById('targetPlayer').value;
+  if (!p) return toast('نام بازیکن را وارد کنید', 'error');
+  api('/api/player/gamemode', { player: p, mode }).then(d => toast(d.success ? 'انجام شد' : 'خطا', d.success ? 'success' : 'error'));
 }
 
-// Utilities
-function formatSize(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+// Console
+function addConsole(text) {
+  const c = document.getElementById('consoleOut');
+  c.innerHTML += '<div style="color:#4ade80;border-bottom:1px solid #222;padding:3px 0">' + text + '</div>';
+  c.scrollTop = c.scrollHeight;
 }
 
-function showToast(message, isError = false) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = isError ? 'toast error' : 'toast';
-    toast.classList.remove('hidden');
-    
-    setTimeout(() => {
-        toast.classList.add('hidden');
-    }, 3000);
+async function sendCmd() {
+  const inp = document.getElementById('cmdInput');
+  const cmd = inp.value.trim();
+  if (!cmd) return;
+  addConsole('> ' + cmd);
+  inp.value = '';
+  try {
+    const d = await api('/api/command', { command: cmd });
+    if (d.response) addConsole(d.response);
+    if (d.error) addConsole('ERROR: ' + d.error);
+  } catch { addConsole('ERROR: connection failed'); }
 }
 
-function toggleSidebar() {
-    document.querySelector('.sidebar').classList.toggle('active');
+// Users Management
+async function loadUsers() {
+  try {
+    const [users, stats] = await Promise.all([apiGet('/api/users'), apiGet('/api/users/stats/overview')]);
+    document.getElementById('uTotal').textContent = stats.total || 0;
+    document.getElementById('uActive').textContent = stats.active || 0;
+    document.getElementById('uBanned').textContent = stats.banned || 0;
+    document.getElementById('uWarns').textContent = stats.totalWarnings || 0;
+    const c = document.getElementById('usersList');
+    if (!users.length) { c.innerHTML = 'کاربری یافت نشد'; return; }
+    c.innerHTML = users.map(u => '<div class="user-card"><div class="user-card-left"><div class="user-card-avatar"><i class="fas fa-user"></i></div><div><div class="user-card-name">' + (u.display_name || u.username) + '</div><div class="user-card-role">' + u.role + ' | ' + u.username + '</div></div></div><div style="display:flex;align-items:center;gap:10px"><span class="user-card-status status-' + u.status + '">' + u.status + '</span><div class="user-card-actions">' +
+      (currentUser.role === 'owner' ? '<button onclick="changeRole(\'' + u.id + '\')" class="mc-btn" style="width:auto;padding:4px 8px;font-size:12px">نقش</button>' : '') +
+      (u.status === 'active' ? '<button onclick="warnUser(\'' + u.id + '\')" class="mc-btn mc-btn-gold" style="width:auto;padding:4px 8px;font-size:12px">هشدار</button>' : '') +
+      (u.status === 'active' && currentUser.role === 'owner' ? '<button onclick="banUser(\'' + u.id + '\')" class="mc-btn mc-btn-danger" style="width:auto;padding:4px 8px;font-size:12px">بن</button>' : '') +
+      (u.status === 'banned' && currentUser.role === 'owner' ? '<button onclick="unbanUser(\'' + u.id + '\')" class="mc-btn" style="width:auto;padding:4px 8px;font-size:12px">رفع بن</button>' : '') +
+      '</div></div></div>').join('');
+  } catch { document.getElementById('usersList').innerHTML = 'خطا در بارگذاری'; }
 }
 
-// Init
-document.addEventListener('DOMContentLoaded', () => {
-    const savedPassword = localStorage.getItem('mc_panel_password');
-    if (savedPassword) {
-        document.getElementById('loginPassword').value = savedPassword;
-    }
-});
+async function changeRole(id) {
+  const r = prompt('نقش جدید (owner/admin/moderator/user):');
+  if (!r) return;
+  try { await api('/api/users/' + id + '/role', { role: r }); loadUsers(); toast('نقش تغییر کرد', 'success'); } catch { toast('خطا', 'error'); }
+}
+
+async function warnUser(id) {
+  const reason = prompt('دلیل هشدار:');
+  if (!reason) return;
+  try {
+    const d = await api('/api/users/' + id + '/warn', { reason, severity: 'medium' });
+    loadUsers();
+    toast('هشدار صادر شد (' + (d.warningCount || 0) + ' هشدار)', 'success');
+  } catch { toast('خطا', 'error'); }
+}
+
+async function banUser(id) {
+  const reason = prompt('دلیل بن:');
+  if (!reason) return;
+  try { await api('/api/users/' + id + '/ban', { reason }); loadUsers(); toast('کاربر مسدود شد', 'success'); } catch { toast('خطا', 'error'); }
+}
+
+async function unbanUser(id) {
+  try { await api('/api/users/' + id + '/unban', {}); loadUsers(); toast('بن رفع شد', 'success'); } catch { toast('خطا', 'error'); }
+}
+
+// Logs
+async function loadLogs() {
+  try {
+    const d = await apiGet('/api/logs?limit=100');
+    const c = document.getElementById('logsList');
+    if (!d.logs || !d.logs.length) { c.innerHTML = 'لاگی موجود نیست'; return; }
+    c.innerHTML = d.logs.map(l => '<div style="padding:4px 0;border-bottom:1px solid #222"><span style="color:#3498db">' + (l.created_at || '') + '</span> | <span style="color:#FFD700">' + (l.username || 'system') + '</span> | ' + l.action + (l.details ? ' - ' + l.details : '') + '</div>').join('');
+  } catch { document.getElementById('logsList').innerHTML = 'خطا'; }
+}
+
+// Config
+async function loadConfig() {
+  try {
+    const d = await apiGet('/api/config');
+    const c = document.getElementById('configList');
+    const keys = { 'server-port': 'پورت', 'max-players': 'حداکثر بازیکن', 'difficulty': 'سختی', 'gamemode': 'حالت بازی', 'pvp': 'PVP', 'view-distance': 'فاصله دید', 'online-mode': 'حالت آنلاین', 'motd': 'پیام سرور' };
+    c.innerHTML = Object.entries(d).map(([k, v]) => '<div style="display:flex;justify-content:space-between;padding:10px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px"><span>' + (keys[k] || k) + '</span><span style="color:#ccc">' + v + '</span></div>').join('');
+  } catch { document.getElementById('configList').innerHTML = 'خطا'; }
+}
+
+// Backups
+async function loadBackups() {
+  try {
+    const d = await apiGet('/api/backups');
+    const c = document.getElementById('backupsList');
+    if (!d.length) { c.innerHTML = 'بکاپی موجود نیست'; return; }
+    c.innerHTML = d.map(b => '<div style="display:flex;justify-content:space-between;padding:12px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px"><span>' + b.name + '</span><span style="color:#ccc">' + new Date(b.created).toLocaleDateString('fa-IR') + '</span></div>').join('');
+  } catch { document.getElementById('backupsList').innerHTML = 'خطا'; }
+}
+
+async function createBackup() {
+  try { await api('/api/server/backup', {}); toast('بکاپ ایجاد شد', 'success'); loadBackups(); } catch { toast('خطا', 'error'); }
+}
