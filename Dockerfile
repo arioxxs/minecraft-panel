@@ -1,13 +1,19 @@
-FROM node:20-alpine
+FROM eclipse-temurin:21-jre-alpine
 
-WORKDIR /app
+RUN apk add --no-cache nodejs npm curl wget bash
+
+RUN mkdir -p /data /app
+
+WORKDIR /app/backend
 
 COPY backend/package*.json ./
 RUN npm install --production
 
 COPY backend/ ./
 COPY panel/ ./public/
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-EXPOSE 5000
+EXPOSE 25565 25575 5000
 
-CMD ["node", "server.js"]
+CMD ["/start.sh"]
