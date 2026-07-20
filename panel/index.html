@@ -28,8 +28,8 @@
         <div id="authError" class="msg msg-error"></div>
         <div id="authSuccess" class="msg msg-success"></div>
         <div id="tab-login">
-          <div class="form-group"><label><i class="fas fa-user"></i> نام کاربری یا ایمیل</label><input type="text" id="loginUser" class="mc-input" placeholder="نام کاربری یا ایمیل"></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> رمز عبور</label><input type="password" id="loginPass" class="mc-input" placeholder="رمز عبور"></div>
+          <div class="form-group"><label><i class="fas fa-user"></i> نام کاربری یا ایمیل</label><input type="text" id="loginUser" class="mc-input" placeholder="نام کاربری یا ایمیل" onkeypress="if(event.key==='Enter')doLogin()"></div>
+          <div class="form-group"><label><i class="fas fa-lock"></i> رمز عبور</label><input type="password" id="loginPass" class="mc-input" placeholder="رمز عبور" onkeypress="if(event.key==='Enter')doLogin()"></div>
           <button onclick="doLogin()" class="mc-btn"><i class="fas fa-sign-in-alt"></i> ورود</button>
           <div class="divider"><span>یا</span></div>
           <button onclick="googleLogin()" class="mc-btn google-btn"><i class="fab fa-google"></i> ورود با گوگل</button>
@@ -40,16 +40,16 @@
           <div class="form-group"><label><i class="fas fa-envelope"></i> ایمیل</label><input type="email" id="regEmail" class="mc-input" placeholder="اختیاری"></div>
           <div class="form-group"><label><i class="fas fa-tag"></i> نام نمایشی</label><input type="text" id="regName" class="mc-input" placeholder="نام نمایشی"></div>
           <div class="form-group"><label><i class="fas fa-lock"></i> رمز عبور</label><input type="password" id="regPass" class="mc-input" placeholder="حداقل 6 کاراکتر"></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار رمز</label><input type="password" id="regPass2" class="mc-input" placeholder="تکرار رمز عبور"></div>
+          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار رمز</label><input type="password" id="regPass2" class="mc-input" placeholder="تکرار رمز عبور" onkeypress="if(event.key==='Enter')doRegister()"></div>
           <button onclick="doRegister()" class="mc-btn mc-btn-gold"><i class="fas fa-user-plus"></i> ثبت‌نام</button>
         </div>
         <div id="tab-forgot" class="hidden">
-          <div class="form-group"><label><i class="fas fa-envelope"></i> ایمیل</label><input type="email" id="forgotEmail" class="mc-input" placeholder="ایمیل خود را وارد کنید"></div>
+          <div class="form-group"><label><i class="fas fa-envelope"></i> ایمیل</label><input type="email" id="forgotEmail" class="mc-input" placeholder="ایمیل خود را وارد کنید" onkeypress="if(event.key==='Enter')doForgot()"></div>
           <button onclick="doForgot()" class="mc-btn mc-btn-blue"><i class="fas fa-paper-plane"></i> ارسال لینک بازیابی</button>
         </div>
         <div id="tab-reset" class="hidden">
           <div class="form-group"><label><i class="fas fa-key"></i> رمز جدید</label><input type="password" id="resetPass" class="mc-input" placeholder="رمز عبور جدید"></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار</label><input type="password" id="resetPass2" class="mc-input" placeholder="تکرار رمز عبور"></div>
+          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار</label><input type="password" id="resetPass2" class="mc-input" placeholder="تکرار رمز عبور" onkeypress="if(event.key==='Enter')doReset()"></div>
           <button onclick="doReset()" class="mc-btn mc-btn-gold"><i class="fas fa-check"></i> تغییر رمز</button>
         </div>
       </div>
