@@ -1,6 +1,6 @@
 FROM eclipse-temurin:21-jre-alpine
 
-RUN apk add --no-cache nodejs npm curl wget bash
+RUN apk add --no-cache nodejs npm curl wget bash netcat-openbsd
 
 RUN mkdir -p /data /app
 

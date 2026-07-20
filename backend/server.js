@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs-extra');
 const { Rcon } = require('rcon-client');
+const { spawn } = require('child_process');
 const schedule = require('node-schedule');
 const archiver = require('archiver');
 const { initDatabase, getDb, saveDatabase } = require('./database');
@@ -309,9 +310,17 @@ app.post('/api/config', authenticate, requireRole('owner', 'admin'), async (req,
 
 app.post('/api/server/start', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
-    await executeCommand('start');
+    if (serverStatus.online) return res.json({ success: true, message: 'Server already running' });
+    const jarPath = path.join(MC_SERVER_DIR, 'server.jar');
+    if (!await fs.pathExists(jarPath)) return res.status(500).json({ success: false, error: 'server.jar not found' });
+    const mcProcess = spawn('java', ['-Xms256M', '-Xmx512M', '-jar', jarPath, '--nogui'], {
+      cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
+    });
+    mcProcess.unref();
+    rconRetries = 0;
+    setTimeout(connectRcon, 15000);
     logActivity(req.user.id, 'server_start', 'Started server', req.ip);
-    res.json({ success: true });
+    res.json({ success: true, message: 'Server starting...' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -319,6 +328,7 @@ app.post('/api/server/start', authenticate, requireRole('owner', 'admin'), async
 
 app.post('/api/server/stop', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
+    if (!serverStatus.online) return res.json({ success: true, message: 'Server already stopped' });
     await executeCommand('stop');
     logActivity(req.user.id, 'server_stop', 'Stopped server', req.ip);
     res.json({ success: true });
@@ -329,6 +339,7 @@ app.post('/api/server/stop', authenticate, requireRole('owner', 'admin'), async 
 
 app.post('/api/server/restart', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
+    if (!serverStatus.online) return res.status(500).json({ success: false, error: 'Server is not running' });
     await executeCommand('restart');
     logActivity(req.user.id, 'server_restart', 'Restarted server', req.ip);
     res.json({ success: true });
