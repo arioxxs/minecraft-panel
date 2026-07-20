@@ -1,4 +1,4 @@
-FROM eclipse-temurin:16-jre-alpine
+FROM openjdk:16-jre-alpine
 
 RUN apk add --no-cache nodejs npm curl wget bash netcat-openbsd
 
