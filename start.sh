@@ -24,10 +24,10 @@ server-port=25565
 level-name=world
 gamemode=survival
 difficulty=normal
-max-players=10
+max-players=5
 online-mode=false
-view-distance=8
-simulation-distance=6
+view-distance=6
+simulation-distance=4
 enable-rcon=true
 rcon.port=25575
 rcon.password=minecraft123
@@ -49,7 +49,7 @@ echo "[3/4] Starting Minecraft server..."
 cd /data
 rm -f /data/STOPPED
 
-java -Xms512M -Xmx1024M -XX:+UseG1GC -jar /data/server.jar --nogui &
+java -Xms256M -Xmx384M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -jar /data/server.jar --nogui &
 MC_PID=$!
 
 echo "MC PID: $MC_PID"
@@ -91,7 +91,7 @@ while true; do
       while [ -f /data/STOPPED ]; do sleep 5; done
       echo "Restart requested!"
       cd /data
-      java -Xms512M -Xmx1024M -XX:+UseG1GC -jar /data/server.jar --nogui &
+      java -Xms256M -Xmx384M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -jar /data/server.jar --nogui &
       MC_PID=$!
       sleep 30
       cd /app/backend
@@ -99,7 +99,7 @@ while true; do
       echo "MC crashed, restarting in 5s..."
       sleep 5
       cd /data
-      java -Xms512M -Xmx1024M -XX:+UseG1GC -jar /data/server.jar --nogui &
+      java -Xms256M -Xmx384M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -jar /data/server.jar --nogui &
       MC_PID=$!
       sleep 30
       cd /app/backend

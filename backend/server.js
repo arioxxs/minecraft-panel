@@ -73,7 +73,7 @@ async function connectRcon() {
       rcon = null;
     }
     rcon = await Rcon.connect({
-      host: process.env.MC_HOST || 'localhost',
+      host: process.env.MC_HOST || '127.0.0.1',
       port: parseInt(process.env.MC_RCON_PORT) || 25575,
       password: process.env.MC_RCON_PASSWORD || 'minecraft123',
       timeout: 10000
