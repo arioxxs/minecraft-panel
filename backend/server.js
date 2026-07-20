@@ -62,16 +62,23 @@ let serverStatus = {
   version: process.env.VERSION || '1.16.5'
 };
 
+let rconLocked = false;
+
 async function connectRcon() {
-  if (rconConnecting) return;
-  rconConnecting = true;
+  if (rconLocked) return;
+  rconLocked = true;
   try {
+    if (rcon) {
+      try { rcon.removeAllListeners(); rcon.end(); } catch(e) {}
+      rcon = null;
+    }
     rcon = await Rcon.connect({
       host: process.env.MC_HOST || 'localhost',
       port: parseInt(process.env.MC_RCON_PORT) || 25575,
-      password: process.env.MC_RCON_PASSWORD || 'minecraft123'
+      password: process.env.MC_RCON_PASSWORD || 'minecraft123',
+      timeout: 10000
     });
-    console.log('RCON Connected');
+    console.log('RCON Connected successfully');
     rconRetries = 0;
     serverStatus.online = true;
     io.emit('serverStatus', serverStatus);
@@ -80,24 +87,40 @@ async function connectRcon() {
       console.log('RCON Disconnected');
       serverStatus.online = false;
       rcon = null;
-      rconConnecting = false;
+      rconLocked = false;
       io.emit('serverStatus', serverStatus);
       setTimeout(connectRcon, 5000);
     });
+
+    rcon.on('error', (err) => {
+      console.log('RCON error:', err.message);
+    });
   } catch (err) {
-    rcon = null;
+    if (rcon) {
+      try { rcon.removeAllListeners(); rcon.end(); } catch(e) {}
+      rcon = null;
+    }
     rconRetries++;
-    const delay = rconRetries <= 3 ? 10000 : 30000;
-    console.log('RCON Connection failed (attempt ' + rconRetries + '), retry in ' + (delay/1000) + 's');
-    rconConnecting = false;
+    let delay;
+    if (rconRetries <= 5) delay = 15000;
+    else if (rconRetries <= 10) delay = 30000;
+    else delay = 60000;
+    console.log('RCON failed (attempt ' + rconRetries + '), retry in ' + (delay/1000) + 's: ' + err.message);
+    rconLocked = false;
     setTimeout(connectRcon, delay);
   }
 }
 
 async function executeCommand(cmd) {
-  if (!rcon) throw new Error('RCON not connected');
-  const response = await rcon.send(cmd);
-  return response;
+  if (!rcon || !serverStatus.online) throw new Error('RCON not connected');
+  try {
+    const response = await rcon.send(cmd);
+    return response;
+  } catch (err) {
+    console.log('RCON send error:', err.message);
+    serverStatus.online = false;
+    throw err;
+  }
 }
 
 app.get('/api/status', async (req, res) => {
@@ -596,7 +619,9 @@ async function startServer() {
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Panel server running on port ${PORT}`);
-    try { connectRcon(); } catch(e) { console.log('RCON skip:', e.message); }
+    setTimeout(() => {
+      try { connectRcon(); } catch(e) { console.log('RCON skip:', e.message); }
+    }, 10000);
   });
 }
 
