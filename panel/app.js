@@ -146,6 +146,39 @@ function enterApp() {
   showEl('mainApp', true);
   document.getElementById('dispName').textContent = currentUser.display_name || currentUser.username;
   document.getElementById('dispRole').textContent = currentUser.role;
+  
+  const r = currentUser.role;
+  const isAdmin = ['owner', 'admin'].includes(r);
+  const isOwner = r === 'owner';
+  const isMod = ['owner', 'admin', 'moderator'].includes(r);
+  
+  // Admin-only nav items
+  const adminPages = ['users', 'logs', 'config', 'backups'];
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const pg = el.dataset.page;
+    if (adminPages.includes(pg) && !isAdmin) el.style.display = 'none';
+    else el.style.display = '';
+  });
+  
+  // Dashboard control buttons - admin only
+  document.querySelectorAll('.control-buttons .mc-btn').forEach(btn => {
+    if (!isAdmin) btn.style.display = 'none';
+    else btn.style.display = '';
+  });
+  
+  // Quick commands - mod+
+  document.querySelectorAll('.quick-commands .mc-btn').forEach(btn => {
+    if (!isMod) btn.style.display = 'none';
+    else btn.style.display = '';
+  });
+  
+  // Players page - player actions admin only
+  const playerActions = document.querySelector('#page-players .card-body');
+  if (playerActions && !isMod) {
+    const actionSection = playerActions.querySelectorAll('button');
+    actionSection.forEach(b => b.style.display = 'none');
+  }
+  
   initSocket();
   loadDashboard();
 }
@@ -259,12 +292,33 @@ async function loadUsers() {
     document.getElementById('uWarns').textContent = stats.totalWarnings || 0;
     const c = document.getElementById('usersList');
     if (!users.length) { c.innerHTML = 'کاربری یافت نشد'; return; }
-    c.innerHTML = users.map(u => '<div class="user-card"><div class="user-card-left"><div class="user-card-avatar"><i class="fas fa-user"></i></div><div><div class="user-card-name">' + (u.display_name || u.username) + '</div><div class="user-card-role">' + u.role + ' | ' + u.username + '</div></div></div><div style="display:flex;align-items:center;gap:10px"><span class="user-card-status status-' + u.status + '">' + u.status + '</span><div class="user-card-actions">' +
-      (currentUser.role === 'owner' ? '<button onclick="changeRole(\'' + u.id + '\')" class="mc-btn" style="width:auto;padding:4px 8px;font-size:12px">نقش</button>' : '') +
-      (u.status === 'active' ? '<button onclick="warnUser(\'' + u.id + '\')" class="mc-btn mc-btn-gold" style="width:auto;padding:4px 8px;font-size:12px">هشدار</button>' : '') +
-      (u.status === 'active' && currentUser.role === 'owner' ? '<button onclick="banUser(\'' + u.id + '\')" class="mc-btn mc-btn-danger" style="width:auto;padding:4px 8px;font-size:12px">بن</button>' : '') +
-      (u.status === 'banned' && currentUser.role === 'owner' ? '<button onclick="unbanUser(\'' + u.id + '\')" class="mc-btn" style="width:auto;padding:4px 8px;font-size:12px">رفع بن</button>' : '') +
-      '</div></div></div>').join('');
+    
+    const r = currentUser.role;
+    const isAdmin = ['owner', 'admin'].includes(r);
+    const isMod = ['owner', 'admin', 'moderator'].includes(r);
+    
+    c.innerHTML = users.map(u => {
+      let btns = '';
+      if (isMod && u.status === 'active') {
+        btns += '<button onclick="warnUser(\'' + u.id + '\')" class="mc-btn mc-btn-gold" style="width:auto;padding:4px 8px;font-size:12px">هشدار</button>';
+      }
+      if (isAdmin && u.status === 'active') {
+        btns += '<button onclick="banUser(\'' + u.id + '\')" class="mc-btn mc-btn-danger" style="width:auto;padding:4px 8px;font-size:12px">بن</button>';
+      }
+      if (isAdmin && u.status === 'banned') {
+        btns += '<button onclick="unbanUser(\'' + u.id + '\')" class="mc-btn" style="width:auto;padding:4px 8px;font-size:12px">رفع بن</button>';
+      }
+      if (r === 'owner' && u.role !== 'owner') {
+        btns += '<button onclick="changeRole(\'' + u.id + '\')" class="mc-btn" style="width:auto;padding:4px 8px;font-size:12px">نقش</button>';
+      }
+      if (r === 'owner' && u.role !== 'owner' && u.id !== currentUser.id) {
+        btns += '<button onclick="deleteUser(\'' + u.id + '\')" class="mc-btn mc-btn-danger" style="width:auto;padding:4px 8px;font-size:12px">حذف</button>';
+      }
+      
+      const roleColors = { owner: '#FFD700', admin: '#3498db', moderator: '#eab308', user: '#ccc' };
+      
+      return '<div class="user-card"><div class="user-card-left"><div class="user-card-avatar" style="background:' + (roleColors[u.role] || '#ccc') + '"><i class="fas fa-user"></i></div><div><div class="user-card-name">' + (u.display_name || u.username) + '</div><div class="user-card-role">' + u.role + ' | @' + u.username + '</div></div></div><div style="display:flex;align-items:center;gap:10px"><span class="user-card-status status-' + u.status + '">' + u.status + '</span><div class="user-card-actions">' + btns + '</div></div></div>';
+    }).join('');
   } catch { document.getElementById('usersList').innerHTML = 'خطا در بارگذاری'; }
 }
 
@@ -292,6 +346,11 @@ async function banUser(id) {
 
 async function unbanUser(id) {
   try { await api('/api/users/' + id + '/unban', {}); loadUsers(); toast('بن رفع شد', 'success'); } catch { toast('خطا', 'error'); }
+}
+
+async function deleteUser(id) {
+  if (!confirm('آیا از حذف این کاربر مطمئن هستید؟')) return;
+  try { await api('/api/users/' + id, { method: 'DELETE' }); loadUsers(); toast('کاربر حذف شد', 'success'); } catch { toast('خطا', 'error'); }
 }
 
 // Logs
