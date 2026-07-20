@@ -2,16 +2,25 @@
 
 mkdir -p /data
 
-echo "Paper 1.21.5 build 114..."
-curl -L --retry 3 --retry-delay 5 -o /data/server.jar \
-  "https://fill-data.papermc.io/v1/objects/2ae6ae22adf417699746e0f89fc2ef6cb6ee050a5f6608cee58f0535d60b509e/paper-1.21.5-114.jar"
+FORGE_VERSION="1.21.11-61.1.9"
+FORGE_URL="https://maven.minecraftforge.net/net/minecraftforge/forge/${FORGE_VERSION}/forge-${FORGE_VERSION}-installer.jar"
 
-FILE_SIZE=$(wc -c < /data/server.jar 2>/dev/null || echo 0)
-echo "Downloaded: ${FILE_SIZE} bytes"
+echo "Downloading Forge ${FORGE_VERSION}..."
+curl -L --retry 3 -o /data/forge-installer.jar "$FORGE_URL"
 
-if [ "$FILE_SIZE" -lt 10000000 ]; then
-  echo "ERROR: Download failed"
+FILE_SIZE=$(wc -c < /data/forge-installer.jar 2>/dev/null || echo 0)
+echo "Forge installer: ${FILE_SIZE} bytes"
+
+if [ "$FILE_SIZE" -lt 1000000 ]; then
+  echo "ERROR: Forge download failed"
   exit 1
+fi
+
+cd /data
+
+if [ ! -f /data/forge-${FORGE_VERSION}-universal.jar ]; then
+  echo "Installing Forge server..."
+  java -jar /data/forge-installer.jar --installServer
 fi
 
 echo "eula=true" > /data/eula.txt
@@ -32,13 +41,21 @@ enable-command-block=false
 spawn-protection=0
 EOF
 
-cd /data
+FORGE_JAR=$(ls /data/forge-*.jar 2>/dev/null | grep -v installer | head -1)
 
-java -Xms256M -Xmx512M -jar /data/server.jar --nogui &
+if [ -z "$FORGE_JAR" ]; then
+  echo "ERROR: Forge jar not found after install"
+  ls -la /data/
+  exit 1
+fi
+
+echo "Using: $FORGE_JAR"
+
+java -Xms256M -Xmx512M -jar "$FORGE_JAR" --nogui &
 MC_PID=$!
 
 echo "Waiting for Minecraft server..."
-for i in $(seq 1 90); do
+for i in $(seq 1 120); do
   if nc -z localhost 25575 2>/dev/null; then
     echo "RCON is ready!"
     break
@@ -54,7 +71,7 @@ cd /app/backend
 node server.js &
 PANEL_PID=$!
 
-echo "=== Panel: port 5000 | Minecraft: port 25565 ==="
+echo "=== Panel: port 5000 | Forge: port 25565 ==="
 
 trap "kill $MC_PID $PANEL_PID 2>/dev/null; exit" SIGTERM SIGINT
 
@@ -62,7 +79,7 @@ while true; do
   if ! kill -0 $MC_PID 2>/dev/null; then
     echo "MC server stopped, restarting..."
     cd /data
-    java -Xms256M -Xmx512M -jar /data/server.jar --nogui &
+    java -Xms256M -Xmx512M -jar "$FORGE_JAR" --nogui &
     MC_PID=$!
     sleep 30
     cd /app/backend

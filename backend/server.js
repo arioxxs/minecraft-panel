@@ -58,7 +58,7 @@ let serverStatus = {
   tps: 20,
   memory: { used: 0, max: 0 },
   uptime: 0,
-  version: process.env.VERSION || '1.21.5'
+  version: process.env.VERSION || '1.21.11'
 };
 
 async function connectRcon() {
