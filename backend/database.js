@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 
-const DB_DIR = path.join(__dirname, 'data');
+const DB_DIR = process.env.DB_DIR || '/data/db';
 const DB_PATH = path.join(DB_DIR, 'panel.db');
 
 let db = null;

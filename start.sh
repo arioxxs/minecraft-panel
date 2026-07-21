@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir -p /data
+mkdir -p /data /data/db
 
 if [ ! -f /data/server.jar ] || [ $(wc -c < /data/server.jar 2>/dev/null || echo 0) -lt 10000000 ]; then
   echo "[1/4] Downloading Paper 1.16.5 build 794..."
