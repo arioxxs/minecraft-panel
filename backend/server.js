@@ -29,7 +29,6 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'), err => {
     if (err) res.json({ status: 'ok', message: 'MC Panel Backend' });
