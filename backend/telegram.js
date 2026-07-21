@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8681026339:AAE6syaKTqfJGe8pN_51ey65YQ-SZZIJ7Fc';
 const JWT_SECRET = process.env.JWT_SECRET || 'mc-panel-secret-key';
 const PANEL_URL = process.env.PANEL_URL || '';
 
