@@ -228,56 +228,29 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
 
     if (d === 'srv_start') {
       if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-      const fs = require('fs-extra'); const path = require('path'); const DIR = process.env.MC_SERVER_DIR || '/data';
-      (async () => {
-        try {
-          const flag = path.join(DIR, 'STOPPED');
-          if (await fs.pathExists(flag)) await fs.remove(flag);
-          const { spawn } = require('child_process');
-          const files = await fs.readdir(DIR);
-          const jar = files.find(f => (f.startsWith('forge-') && f.endsWith('-universal.jar')) || f === 'server.jar');
-          const jp = jar ? path.join(DIR, jar) : path.join(DIR, 'server.jar');
-          if (!await fs.pathExists(jp)) return edit(c, '❌ فایل سرور نیست!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-          spawn('java', ['-Xms200M', '-Xmx256M', '-jar', jp, '--nogui'], { cwd: DIR, stdio: 'ignore', detached: true }).unref();
-          edit(c, '▶️ <b>در حال راه‌اندازی...</b>\n\nمنتظر ۳۰ ثانیه باش.', { inline_keyboard: [[{ text: '📊 وضعیت', callback_data: 'm_status' }, { text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-        } catch (e) { edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] }); }
-      })();
+      const DIR = process.env.MC_SERVER_DIR || '/data';
+      const flag = require('path').join(DIR, 'STOPPED');
+      const fs = require('fs-extra');
+      if (await fs.pathExists(flag)) await fs.remove(flag);
+      edit(c, '▶️ <b>در حال راه‌اندازی...</b>\n\nلطفاً ۳۰ ثانیه صبر کن.', { inline_keyboard: [[{ text: '📊 وضعیت', callback_data: 'm_status' }, { text: '◀️ بازگشت', callback_data: 'm_server' }]] });
       return;
     }
 
     if (d === 'srv_stop') {
       if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-      const fs = require('fs-extra'); const DIR = process.env.MC_SERVER_DIR || '/data';
-      (async () => {
-        try {
-          await fs.writeFile(require('path').join(DIR, 'STOPPED'), 'stopped');
-          const s = getStatus();
-          if (s.online) await rconSend('stop');
-          edit(c, '⏹ <b>سرور خاموش شد.</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-        } catch (e) { edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] }); }
-      })();
+      const DIR = process.env.MC_SERVER_DIR || '/data';
+      await require('fs-extra').writeFile(require('path').join(DIR, 'STOPPED'), 'stopped');
+      const s = getStatus();
+      if (s.online) await rconSend('stop');
+      edit(c, '⏹ <b>سرور خاموش شد.</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
       return;
     }
 
     if (d === 'srv_restart') {
       if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-      const fs = require('fs-extra'); const DIR = process.env.MC_SERVER_DIR || '/data';
-      (async () => {
-        try {
-          const flag = require('path').join(DIR, 'STOPPED');
-          if (await fs.pathExists(flag)) await fs.remove(flag);
-          const s = getStatus();
-          if (s.online) await rconSend('restart');
-          else {
-            const { spawn } = require('child_process');
-            const files = await fs.readdir(DIR);
-            const jar = files.find(f => (f.startsWith('forge-') && f.endsWith('-universal.jar')) || f === 'server.jar');
-            const jp = jar ? require('path').join(DIR, jar) : require('path').join(DIR, 'server.jar');
-            spawn('java', ['-Xms200M', '-Xmx256M', '-jar', jp, '--nogui'], { cwd: DIR, stdio: 'ignore', detached: true }).unref();
-          }
-          edit(c, '🔄 <b>ریستارت شد.</b>', { inline_keyboard: [[{ text: '📊 وضعیت', callback_data: 'm_status' }, { text: '◀️ بازگشت', callback_data: 'm_server' }]] });
-        } catch (e) { edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] }); }
-      })();
+      const s = getStatus();
+      if (s.online) await rconSend('stop');
+      edit(c, '🔄 <b>ریستارت شد.</b>\n\nلطفاً ۳۰ ثانیه صبر کن.', { inline_keyboard: [[{ text: '📊 وضعیت', callback_data: 'm_status' }, { text: '◀️ بازگشت', callback_data: 'm_server' }]] });
       return;
     }
 
