@@ -61,6 +61,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
         reply_markup: {
           inline_keyboard: [
             [{ text: '🔑 ورود', callback_data: 'step_login' }, { text: '📝 ثبت‌نام', callback_data: 'step_register' }],
+            [{ text: '🔄 بازیابی رمز', callback_data: 'step_reset' }],
             [{ text: '❓ راهنما', callback_data: 'm_help' }]
           ]
         }
@@ -99,7 +100,8 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
       case 'login_username': {
         session.username = text;
         session.step = 'login_password';
-        bot.sendMessage(chatId, '🔑 رمز عبور رو بفرست:', {
+        bot.sendMessage(chatId, `✅ نام: <code>${text}</code>\n\n📝 <b>مرحله ۲ از ۲</b>\n\nرمز عبور رو بفرست:`, {
+          parse_mode: 'HTML',
           reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
         });
         break;
@@ -126,7 +128,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
       }
       case 'register_username': {
         if (text.length < 3 || text.length > 20) {
-          return bot.sendMessage(chatId, '❌ نام کاربری 3 تا 20 کاراکتر باشه.\nدوباره بفرست:');
+          return bot.sendMessage(chatId, '❌ نام کاربری ۳ تا ۲۰ کاراکتر باشه.\n\n📝 <b>مرحله ۱ از ۳</b>\nدوباره بفرست:', { parse_mode: 'HTML' });
         }
         if (dbGet('SELECT id FROM users WHERE username = ?', [text])) {
           delete sessions[chatId];
@@ -134,18 +136,20 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
         }
         session.username = text;
         session.step = 'register_password';
-        bot.sendMessage(chatId, '🔑 رمز عبور رو بفرست (حداقل 6 کاراکتر):', {
+        bot.sendMessage(chatId, `✅ نام: <code>${text}</code>\n\n📝 <b>مرحله ۲ از ۳</b>\n\nرمز عبور رو بفرست (حداقل ۶ کاراکتر):`, {
+          parse_mode: 'HTML',
           reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
         });
         break;
       }
       case 'register_password': {
         if (text.length < 6) {
-          return bot.sendMessage(chatId, '❌ رمز باید حداقل 6 کاراکتر باشه.\nدوباره بفرست:');
+          return bot.sendMessage(chatId, '❌ رمز باید حداقل ۶ کاراکتر باشه.\n\n📝 <b>مرحله ۲ از ۳</b>\nدوباره بفرست:', { parse_mode: 'HTML' });
         }
         session.password = text;
         session.step = 'register_confirm';
-        bot.sendMessage(chatId, '🔑 رمز رو دوباره بفرست برای تأیید:', {
+        bot.sendMessage(chatId, `✅ نام: <code>${session.username}</code>\n\n📝 <b>مرحله ۳ از ۳</b>\n\nرمز رو دوباره بفرست برای تأیید:`, {
+          parse_mode: 'HTML',
           reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
         });
         break;
@@ -153,7 +157,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
       case 'register_confirm': {
         if (text !== session.password) {
           delete sessions[chatId];
-          return sendMainMenu(chatId, '❌ رمزها مطابقت ندارن!');
+          return sendMainMenu(chatId, '❌ رمزها مطابقت ندارن!\n\nاز اول شروع کن: /start');
         }
         const id = uuidv4();
         const hash = bcrypt.hashSync(session.password, 10);
@@ -163,7 +167,46 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
         authorizedUsers[chatId] = { id, username: session.username, role: 'user', display_name: session.username };
         logAct(id, 'register', 'Registered via Telegram', 'telegram');
         delete sessions[chatId];
-        sendMainMenu(chatId, `✅ ثبت‌نام موفق!\nنام: ${session.username}\nنقش: user`);
+        sendMainMenu(chatId, `✅ ثبت‌نام موفق!\n\nنام: <code>${session.username}</code>\nنقش: user\n\nحالا میتونی از منو استفاده کنی.`);
+        break;
+      }
+      case 'reset_username': {
+        const user = dbGet('SELECT id FROM users WHERE username = ?', [text]);
+        if (!user) {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ کاربری با این نام یافت نشد!');
+        }
+        session.username = text;
+        session.step = 'reset_password';
+        bot.sendMessage(chatId, `✅ نام: <code>${text}</code>\n\n📝 <b>مرحله ۲ از ۳</b>\n\nرمز جدید رو بفرست (حداقل ۶ کاراکتر):`, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
+        break;
+      }
+      case 'reset_password': {
+        if (text.length < 6) {
+          return bot.sendMessage(chatId, '❌ رمز باید حداقل ۶ کاراکتر باشه.\n\n📝 <b>مرحله ۲ از ۳</b>\nدوباره بفرست:', { parse_mode: 'HTML' });
+        }
+        session.password = text;
+        session.step = 'reset_confirm';
+        bot.sendMessage(chatId, `✅ نام: <code>${session.username}</code>\n\n📝 <b>مرحله ۳ از ۳</b>\n\nرمز رو دوباره بفرست برای تأیید:`, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
+        break;
+      }
+      case 'reset_confirm': {
+        if (text !== session.password) {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ رمزها مطابقت ندارن!\n\nاز اول شروع کن: /start');
+        }
+        const u = dbGet('SELECT id FROM users WHERE username = ?', [session.username]);
+        const hash = bcrypt.hashSync(session.password, 10);
+        dbRun('UPDATE users SET password = ? WHERE id = ?', [hash, u.id]);
+        logAct(u.id, 'reset_password', 'Password reset via Telegram', 'telegram');
+        delete sessions[chatId];
+        sendMainMenu(chatId, `✅ رمز با موفقیت تغییر کرد!\n\nنام: <code>${session.username}</code>\n\nحالا با رمز جدید وارد شو.`);
         break;
       }
       case 'warn_target': {
@@ -224,7 +267,8 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     // login steps
     if (data === 'step_login') {
       sessions[chatId] = { step: 'login_username' };
-      return bot.sendMessage(chatId, '📝 نام کاربری رو بفرست:', {
+      return bot.sendMessage(chatId, '📝 <b>مرحله ۱ از ۲</b>\n\nنام کاربری رو بفرست:', {
+        parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
       });
     }
@@ -232,7 +276,17 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     // register steps
     if (data === 'step_register') {
       sessions[chatId] = { step: 'register_username' };
-      return bot.sendMessage(chatId, '📝 نام کاربری رو بفرست (3-20 کاراکتر):', {
+      return bot.sendMessage(chatId, '📝 <b>مرحله ۱ از ۳</b>\n\nنام کاربری رو بفرست (۳ تا ۲۰ کاراکتر):', {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+
+    // reset password steps
+    if (data === 'step_reset') {
+      sessions[chatId] = { step: 'reset_username' };
+      return bot.sendMessage(chatId, '🔄 <b>بازیابی رمز</b>\n\n📝 <b>مرحله ۱ از ۳</b>\n\nنام کاربری رو بفرست:', {
+        parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
       });
     }
