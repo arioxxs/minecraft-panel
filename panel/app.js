@@ -49,9 +49,11 @@ function showAuthOk(msg) {
 
 async function api(path, body, method) {
   const m = method || (body ? 'POST' : 'GET');
-  const opts = { method: m, headers: { 'Content-Type': 'application/json' } };
-  if (body && m !== 'DELETE' && m !== 'PUT') opts.body = JSON.stringify(body);
-  if (body && m === 'PUT') opts.body = JSON.stringify(body);
+  const opts = { method: m, headers: {} };
+  if (body && !(body instanceof FormData)) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
   if (token) opts.headers['Authorization'] = 'Bearer ' + token;
   const r = await fetch(API + path, opts);
   return r.json();
