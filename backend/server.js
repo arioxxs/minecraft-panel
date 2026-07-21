@@ -42,6 +42,10 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/logs', logRoutes);
