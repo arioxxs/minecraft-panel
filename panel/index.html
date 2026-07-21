@@ -9,10 +9,10 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <div id="loadingScreen" class="loading-screen">
   <h2 style="font-family:'Press Start 2P';font-size:16px;color:#FFD700;text-shadow:2px 2px 0 #000">MC PANEL</h2>
   <div class="loading-bar"><div class="loading-progress" id="loadBar"></div></div>
-  <p style="font-family:'Press Start 2P';font-size:10px;color:#ccc;margin-top:15px" id="loadText">Loading...</p>
 </div>
 
 <div id="loginScreen" class="login-screen hidden">
@@ -28,29 +28,15 @@
         <div id="authError" class="msg msg-error"></div>
         <div id="authSuccess" class="msg msg-success"></div>
         <div id="tab-login">
-          <div class="form-group"><label><i class="fas fa-user"></i> نام کاربری یا ایمیل</label><input type="text" id="loginUser" class="mc-input" placeholder="نام کاربری یا ایمیل" onkeypress="if(event.key==='Enter')doLogin()"></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> رمز عبور</label><div class="pass-wrap"><input type="password" id="loginPass" class="mc-input" placeholder="رمز عبور" onkeypress="if(event.key==='Enter')doLogin()"><button type="button" class="btn-eye" onclick="togglePass('loginPass',this)"><i class="fas fa-eye"></i></button></div></div>
+          <div class="form-group"><label><i class="fas fa-user"></i> نام کاربری</label><input type="text" id="loginUser" class="mc-input" placeholder="نام کاربری" onkeypress="if(event.key==='Enter')doLogin()"></div>
+          <div class="form-group"><label><i class="fas fa-lock"></i> رمز</label><div class="pass-wrap"><input type="password" id="loginPass" class="mc-input" placeholder="رمز عبور" onkeypress="if(event.key==='Enter')doLogin()"><button type="button" class="btn-eye" onclick="togglePass('loginPass',this)"><i class="fas fa-eye"></i></button></div></div>
           <button onclick="doLogin()" class="mc-btn"><i class="fas fa-sign-in-alt"></i> ورود</button>
-          <div class="divider"><span>یا</span></div>
-          <button onclick="googleLogin()" class="mc-btn google-btn"><i class="fab fa-google"></i> ورود با گوگل</button>
-          <div class="form-footer"><a onclick="showTab('forgot')">رمز عبور را فراموش کردم</a></div>
         </div>
         <div id="tab-register" class="hidden">
           <div class="form-group"><label><i class="fas fa-user"></i> نام کاربری</label><input type="text" id="regUser" class="mc-input" placeholder="3-20 کاراکتر"></div>
-          <div class="form-group"><label><i class="fas fa-envelope"></i> ایمیل</label><input type="email" id="regEmail" class="mc-input" placeholder="اختیاری"></div>
-          <div class="form-group"><label><i class="fas fa-tag"></i> نام نمایشی</label><input type="text" id="regName" class="mc-input" placeholder="نام نمایشی"></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> رمز عبور</label><div class="pass-wrap"><input type="password" id="regPass" class="mc-input" placeholder="حداقل 6 کاراکتر"><button type="button" class="btn-eye" onclick="togglePass('regPass',this)"><i class="fas fa-eye"></i></button></div></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار رمز</label><div class="pass-wrap"><input type="password" id="regPass2" class="mc-input" placeholder="تکرار رمز عبور" onkeypress="if(event.key==='Enter')doRegister()"><button type="button" class="btn-eye" onclick="togglePass('regPass2',this)"><i class="fas fa-eye"></i></button></div></div>
+          <div class="form-group"><label><i class="fas fa-lock"></i> رمز</label><div class="pass-wrap"><input type="password" id="regPass" class="mc-input" placeholder="حداقل 6 کاراکتر"><button type="button" class="btn-eye" onclick="togglePass('regPass',this)"><i class="fas fa-eye"></i></button></div></div>
+          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار رمز</label><div class="pass-wrap"><input type="password" id="regPass2" class="mc-input" placeholder="تکرار رمز" onkeypress="if(event.key==='Enter')doRegister()"><button type="button" class="btn-eye" onclick="togglePass('regPass2',this)"><i class="fas fa-eye"></i></button></div></div>
           <button onclick="doRegister()" class="mc-btn mc-btn-gold"><i class="fas fa-user-plus"></i> ثبت‌نام</button>
-        </div>
-        <div id="tab-forgot" class="hidden">
-          <div class="form-group"><label><i class="fas fa-envelope"></i> ایمیل</label><input type="email" id="forgotEmail" class="mc-input" placeholder="ایمیل خود را وارد کنید" onkeypress="if(event.key==='Enter')doForgot()"></div>
-          <button onclick="doForgot()" class="mc-btn mc-btn-blue"><i class="fas fa-paper-plane"></i> ارسال لینک بازیابی</button>
-        </div>
-        <div id="tab-reset" class="hidden">
-          <div class="form-group"><label><i class="fas fa-key"></i> رمز جدید</label><div class="pass-wrap"><input type="password" id="resetPass" class="mc-input" placeholder="رمز عبور جدید"><button type="button" class="btn-eye" onclick="togglePass('resetPass',this)"><i class="fas fa-eye"></i></button></div></div>
-          <div class="form-group"><label><i class="fas fa-lock"></i> تکرار</label><div class="pass-wrap"><input type="password" id="resetPass2" class="mc-input" placeholder="تکرار رمز عبور" onkeypress="if(event.key==='Enter')doReset()"><button type="button" class="btn-eye" onclick="togglePass('resetPass2',this)"><i class="fas fa-eye"></i></button></div></div>
-          <button onclick="doReset()" class="mc-btn mc-btn-gold"><i class="fas fa-check"></i> تغییر رمز</button>
         </div>
       </div>
     </div>
@@ -60,99 +46,116 @@
     <div class="dirt-block grass"></div><div class="dirt-block"></div><div class="dirt-block grass"></div><div class="dirt-block"></div>
     <div class="dirt-block grass"></div><div class="dirt-block"></div><div class="dirt-block grass"></div><div class="dirt-block"></div>
     <div class="dirt-block grass"></div><div class="dirt-block"></div><div class="dirt-block grass"></div><div class="dirt-block"></div>
-    <div class="dirt-block grass"></div><div class="dirt-block"></div><div class="dirt-block grass"></div><div class="dirt-block"></div>
   </div>
 </div>
 
 <div id="mainApp" class="main-app hidden">
-  <nav class="sidebar" id="sidebar">
-    <div class="sidebar-header"><div class="logo-icon"><i class="fas fa-cube"></i></div><span>MC PANEL</span><button class="btn-close-sidebar" onclick="closeSidebar()"><i class="fas fa-times"></i></button></div>
-    <div class="user-info">
-      <div class="user-avatar"><i class="fas fa-user"></i></div>
-      <div class="user-details"><span class="user-name" id="dispName">User</span><span class="user-role" id="dispRole">user</span></div>
-    </div>
-    <ul class="nav-menu">
-      <li class="nav-item active" data-page="dashboard"><i class="fas fa-tachometer-alt"></i><span>داشبورد</span></li>
-      <li class="nav-item" data-page="players"><i class="fas fa-gamepad"></i><span>بازیکنان</span></li>
-                <li class="nav-item" data-page="console"><i class="fas fa-terminal"></i><span>کنسول</span></li>
-                <li class="nav-item" data-page="users" id="navUsers"><i class="fas fa-user-shield"></i><span>مدیریت کاربران</span></li>
-      <li class="nav-item" data-page="plugins"><i class="fas fa-puzzle-piece"></i><span>پلاگین‌ها</span></li>
-      <li class="nav-item" data-page="worlds"><i class="fas fa-globe-americas"></i><span>جهان‌ها</span></li>
-      <li class="nav-item" data-page="backups"><i class="fas fa-cloud-upload-alt"></i><span>بکاپ‌ها</span></li>
-      <li class="nav-item" data-page="config"><i class="fas fa-cog"></i><span>تنظیمات</span></li>
-      <li class="nav-item" data-page="logs"><i class="fas fa-file-alt"></i><span>لاگ فعالیت</span></li>
-    </ul>
-    <div class="sidebar-footer"><button onclick="doLogout()" class="mc-btn mc-btn-danger" style="font-size:16px;padding:10px"><i class="fas fa-sign-out-alt"></i> خروج</button></div>
-  </nav>
-  <main class="main-content">
-    <header class="top-bar">
-      <div class="top-bar-right"><button class="btn-toggle-sidebar" onclick="document.getElementById('sidebar').classList.toggle('active')"><i class="fas fa-bars"></i></button><h2 id="pageTitle">داشبورد</h2></div>
-      <div class="top-bar-left"><div class="status-badge"><span class="status-dot offline" id="statusDot"></span><span id="statusText">آفلاین</span></div><div class="server-info"><span id="navPlayers">0 بازیکن</span><span id="navTps">TPS: --</span></div></div>
-    </header>
-    <div id="page-dashboard" class="page active">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-icon bg-green"><i class="fas fa-server"></i></div><div class="stat-info"><h3 id="dashStatus">آفلاین</h3><p>وضعیت سرور</p></div></div>
-        <div class="stat-card"><div class="stat-icon bg-blue"><i class="fas fa-users"></i></div><div class="stat-info"><h3 id="dashPlayers">0/20</h3><p>بازیکنان</p></div></div>
-        <div class="stat-card"><div class="stat-icon bg-yellow"><i class="fas fa-bolt"></i></div><div class="stat-info"><h3 id="dashTps">20.0</h3><p>TPS</p></div></div>
-        <div class="stat-card"><div class="stat-icon bg-purple"><i class="fas fa-memory"></i></div><div class="stat-info"><h3 id="dashMem">0MB</h3><p>حافظه</p></div></div>
+  <header class="top-bar-fixed">
+    <div class="top-row">
+      <div class="top-user"><i class="fas fa-user"></i> <span id="dispName">User</span> <span class="role-badge" id="dispRole">user</span></div>
+      <div class="top-status">
+        <span class="status-dot offline" id="statusDot"></span>
+        <span id="statusText">آفلاین</span>
+        <span class="top-sep">|</span>
+        <span id="topPlayers">0 بازیکن</span>
+        <span class="top-sep">|</span>
+        <span id="topTps">TPS: --</span>
       </div>
-      <div class="grid-2">
-        <div class="card"><div class="card-header"><h3><i class="fas fa-gamepad"></i> کنترل سرور</h3></div><div class="card-body"><div class="control-buttons">
-          <button onclick="srvAction('start')" class="mc-btn"><i class="fas fa-play"></i> شروع</button>
-          <button onclick="srvAction('stop')" class="mc-btn mc-btn-danger"><i class="fas fa-stop"></i> توقف</button>
-          <button onclick="srvAction('restart')" class="mc-btn mc-btn-gold"><i class="fas fa-redo"></i> ریستارت</button>
-          <button onclick="srvAction('save-all')" class="mc-btn mc-btn-blue"><i class="fas fa-save"></i> ذخیره</button>
-        </div></div></div>
-        <div class="card"><div class="card-header"><h3><i class="fas fa-bolt"></i> دستورات سریع</h3></div><div class="card-body"><div class="quick-commands">
-          <button onclick="quickCmd('weather clear')" class="mc-btn"><i class="fas fa-sun"></i> آفتابی</button>
-          <button onclick="quickCmd('weather rain')" class="mc-btn"><i class="fas fa-cloud-rain"></i> باران</button>
-          <button onclick="quickCmd('time set day')" class="mc-btn"><i class="fas fa-sun"></i> روز</button>
-          <button onclick="quickCmd('time set night')" class="mc-btn"><i class="fas fa-moon"></i> شب</button>
-          <button onclick="quickCmd('difficulty peaceful')" class="mc-btn"><i class="fas fa-dove"></i> آرام</button>
-          <button onclick="quickCmd('difficulty hard')" class="mc-btn"><i class="fas fa-skull-crossbones"></i> سخت</button>
-        </div></div></div>
-      </div>
-      <div class="card"><div class="card-header"><h3><i class="fas fa-users"></i> بازیکنان آنلاین</h3></div><div class="card-body"><div id="dashPlayerList">-</div></div></div>
+      <button onclick="doLogout()" class="btn-logout"><i class="fas fa-sign-out-alt"></i> خروج</button>
     </div>
-    <div id="page-players" class="page">
-      <div class="grid-2">
-        <div class="card"><div class="card-header"><h3><i class="fas fa-users"></i> آنلاین</h3></div><div class="card-body"><div id="onlinePlayers">-</div></div></div>
-        <div class="card"><div class="card-header"><h3><i class="fas fa-user-cog"></i> مدیریت بازیکن</h3></div><div class="card-body">
-          <div class="form-group"><label>نام بازیکن</label><input type="text" id="targetPlayer" class="mc-input" placeholder="نام بازیکن"></div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">
-            <button onclick="plrCmd('kick')" class="mc-btn mc-btn-danger" style="width:auto;padding:8px 16px;font-size:16px">اخراج</button>
-            <button onclick="plrCmd('ban')" class="mc-btn mc-btn-danger" style="width:auto;padding:8px 16px;font-size:16px">بن</button>
-            <button onclick="plrCmd('pardon')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">رفع بن</button>
-            <button onclick="plrCmd('op')" class="mc-btn mc-btn-gold" style="width:auto;padding:8px 16px;font-size:16px">OP</button>
-            <button onclick="plrCmd('deop')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">DeOP</button>
-            <button onclick="plrGm('survival')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">بقا</button>
-            <button onclick="plrGm('creative')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">خلاقیت</button>
+  </header>
+
+  <div class="single-page">
+
+    <div class="section-title"><i class="fas fa-server"></i> وضعیت و کنترل سرور</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon bg-green"><i class="fas fa-server"></i></div><div class="stat-info"><h3 id="dashStatus">آفلاین</h3><p>وضعیت سرور</p></div></div>
+      <div class="stat-card"><div class="stat-icon bg-blue"><i class="fas fa-users"></i></div><div class="stat-info"><h3 id="dashPlayers">0/20</h3><p>بازیکنان</p></div></div>
+      <div class="stat-card"><div class="stat-icon bg-yellow"><i class="fas fa-bolt"></i></div><div class="stat-info"><h3 id="dashTps">20.0</h3><p>TPS</p></div></div>
+      <div class="stat-card"><div class="stat-icon bg-purple"><i class="fas fa-memory"></i></div><div class="stat-info"><h3 id="dashMem">0MB</h3><p>حافظه</p></div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-gamepad"></i> کنترل سرور</h3></div>
+        <div class="card-body">
+          <div class="control-buttons">
+            <button onclick="srvAction('start')" class="mc-btn"><i class="fas fa-play"></i> شروع</button>
+            <button onclick="srvAction('stop')" class="mc-btn mc-btn-danger"><i class="fas fa-stop"></i> توقف</button>
+            <button onclick="srvAction('restart')" class="mc-btn mc-btn-gold"><i class="fas fa-redo"></i> ریستارت</button>
+            <button onclick="srvAction('save-all')" class="mc-btn mc-btn-blue"><i class="fas fa-save"></i> ذخیره</button>
           </div>
-        </div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-bolt"></i> دستورات سریع</h3></div>
+        <div class="card-body">
+          <div class="quick-commands">
+            <button onclick="quickCmd('time set day')" class="mc-btn"><i class="fas fa-sun"></i> روز</button>
+            <button onclick="quickCmd('time set night')" class="mc-btn"><i class="fas fa-moon"></i> شب</button>
+            <button onclick="quickCmd('weather clear')" class="mc-btn"><i class="fas fa-cloud-sun"></i> آفتابی</button>
+            <button onclick="quickCmd('weather rain')" class="mc-btn"><i class="fas fa-cloud-rain"></i> باران</button>
+            <button onclick="quickCmd('difficulty peaceful')" class="mc-btn"><i class="fas fa-dove"></i> آرام</button>
+            <button onclick="quickCmd('difficulty hard')" class="mc-btn"><i class="fas fa-skull-crossbones"></i> سخت</button>
+          </div>
+        </div>
       </div>
     </div>
-    <div id="page-console" class="page">
-      <div class="card"><div class="card-header"><h3><i class="fas fa-terminal"></i> کنسول</h3><button onclick="document.getElementById('consoleOut').innerHTML=''" class="mc-btn" style="width:auto;padding:6px 12px;font-size:14px">پاک کردن</button></div><div class="card-body">
-        <div id="consoleOut" style="background:#0a0a0a;border:2px solid #333;padding:15px;height:400px;overflow-y:auto;font-family:Consolas,monospace;font-size:13px;direction:ltr;text-align:left;margin-bottom:15px"></div>
-        <div style="display:flex;gap:10px"><input type="text" id="cmdInput" class="mc-input" style="flex:1" placeholder="دستور..." onkeypress="if(event.key==='Enter')sendCmd()"><button onclick="sendCmd()" class="mc-btn" style="width:auto;padding:10px 20px;font-size:18px">ارسال</button></div>
-      </div></div>
-    </div>
-    <div id="page-users" class="page">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-icon bg-green"><i class="fas fa-users"></i></div><div class="stat-info"><h3 id="uTotal">0</h3><p>کل</p></div></div>
-        <div class="stat-card"><div class="stat-icon bg-blue"><i class="fas fa-user-check"></i></div><div class="stat-info"><h3 id="uActive">0</h3><p>فعال</p></div></div>
-        <div class="stat-card"><div class="stat-icon bg-red"><i class="fas fa-user-ban"></i></div><div class="stat-info"><h3 id="uBanned">0</h3><p>مسدود</p></div></div>
-        <div class="stat-card"><div class="stat-icon bg-yellow"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-info"><h3 id="uWarns">0</h3><p>هشدارها</p></div></div>
+
+    <div class="section-title"><i class="fas fa-users"></i> بازیکنان آنلاین</div>
+    <div class="card">
+      <div class="card-body">
+        <div id="onlinePlayers">-</div>
+        <div class="player-actions" style="margin-top:15px">
+          <div class="form-group" style="margin-bottom:10px"><input type="text" id="targetPlayer" class="mc-input" placeholder="نام بازیکن رو کلیک کن یا تایپ کن"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button onclick="plrCmd('kick')" class="mc-btn mc-btn-danger" style="width:auto;padding:8px 16px;font-size:16px">👢 اخراج</button>
+            <button onclick="plrCmd('ban')" class="mc-btn mc-btn-danger" style="width:auto;padding:8px 16px;font-size:16px">🚫 بن</button>
+            <button onclick="plrCmd('pardon')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">✅ رفع بن</button>
+            <button onclick="plrCmd('op')" class="mc-btn mc-btn-gold" style="width:auto;padding:8px 16px;font-size:16px">👑 OP</button>
+            <button onclick="plrCmd('deop')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">🚫 DeOP</button>
+            <button onclick="plrGm('survival')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">生存 بقا</button>
+            <button onclick="plrGm('creative')" class="mc-btn" style="width:auto;padding:8px 16px;font-size:16px">✨ خلاقیت</button>
+          </div>
+        </div>
       </div>
-      <div class="card"><div class="card-header"><h3><i class="fas fa-user-shield"></i> کاربران</h3><button onclick="loadUsers()" class="mc-btn" style="width:auto;padding:8px 16px;font-size:14px"><i class="fas fa-sync"></i></button></div><div class="card-body"><div id="usersList" class="users-grid"></div></div></div>
     </div>
-    <div id="page-plugins" class="page"><div class="card"><div class="card-header"><h3><i class="fas fa-puzzle-piece"></i> پلاگین‌ها</h3></div><div class="card-body"><div id="pluginsList">-</div></div></div></div>
-    <div id="page-worlds" class="page"><div class="card"><div class="card-header"><h3><i class="fas fa-globe-americas"></i> جهان‌ها</h3></div><div class="card-body"><div id="worldsList">-</div></div></div></div>
-    <div id="page-backups" class="page"><div class="card"><div class="card-header"><h3><i class="fas fa-cloud-upload-alt"></i> بکاپ‌ها</h3><button onclick="createBackup()" class="mc-btn mc-btn-gold" style="width:auto;padding:8px 16px;font-size:14px"><i class="fas fa-plus"></i> بکاپ جدید</button></div><div class="card-body"><div id="backupsList">-</div></div></div></div>
-    <div id="page-config" class="page"><div class="card"><div class="card-header"><h3><i class="fas fa-cog"></i> تنظیمات سرور</h3></div><div class="card-body"><div id="configList">-</div></div></div></div>
-    <div id="page-logs" class="page"><div class="card"><div class="card-header"><h3><i class="fas fa-file-alt"></i> لاگ فعالیت</h3></div><div class="card-body"><div id="logsList" style="background:#0a0a0a;border:2px solid #333;padding:15px;max-height:500px;overflow-y:auto;font-family:Consolas,monospace;font-size:12px;direction:ltr">-</div></div></div></div>
-  </main>
+
+    <div class="section-title" id="secUsers" style="display:none"><i class="fas fa-user-shield"></i> مدیریت کاربران</div>
+    <div class="card" id="cardUsers" style="display:none">
+      <div class="card-header"><h3><i class="fas fa-user-shield"></i> کاربران پنل</h3><button onclick="loadUsers()" class="mc-btn" style="width:auto;padding:6px 12px;font-size:14px"><i class="fas fa-sync"></i></button></div>
+      <div class="card-body">
+        <div class="stats-grid" style="margin-bottom:15px">
+          <div class="stat-card" style="padding:12px"><div class="stat-icon bg-green" style="width:35px;height:35px;font-size:14px"><i class="fas fa-users"></i></div><div class="stat-info"><h3 id="uTotal" style="font-size:12px">0</h3><p style="font-size:14px">کل</p></div></div>
+          <div class="stat-card" style="padding:12px"><div class="stat-icon bg-blue" style="width:35px;height:35px;font-size:14px"><i class="fas fa-user-check"></i></div><div class="stat-info"><h3 id="uActive" style="font-size:12px">0</h3><p style="font-size:14px">فعال</p></div></div>
+          <div class="stat-card" style="padding:12px"><div class="stat-icon bg-red" style="width:35px;height:35px;font-size:14px"><i class="fas fa-user-ban"></i></div><div class="stat-info"><h3 id="uBanned" style="font-size:12px">0</h3><p style="font-size:14px">مسدود</p></div></div>
+        </div>
+        <div id="usersList" class="users-grid"></div>
+      </div>
+    </div>
+
+    <div class="section-title" id="secConsole"><i class="fas fa-terminal"></i> کنسول</div>
+    <div class="card" id="cardConsole">
+      <div class="card-header"><h3><i class="fas fa-terminal"></i> کنسول دستورات</h3><button onclick="document.getElementById('consoleOut').innerHTML=''" class="mc-btn" style="width:auto;padding:6px 12px;font-size:14px">🗑 پاک</button></div>
+      <div class="card-body">
+        <div id="consoleOut" class="console-output"></div>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <input type="text" id="cmdInput" class="mc-input" style="flex:1" placeholder="دستور رو اینجا تایپ کن..." onkeypress="if(event.key==='Enter')sendCmd()">
+          <button onclick="sendCmd()" class="mc-btn" style="width:auto;padding:10px 25px;font-size:18px">ارسال</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" id="secLogs"><i class="fas fa-file-alt"></i> لاگ فعالیت</div>
+    <div class="card" id="cardLogs">
+      <div class="card-body">
+        <div id="logsList" class="console-output" style="height:250px"></div>
+      </div>
+    </div>
+
+  </div>
 </div>
+
 <div id="toast" class="toast hidden"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="app.js"></script>
