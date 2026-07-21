@@ -355,18 +355,8 @@ app.post('/api/config', authenticate, requireRole('owner', 'admin'), async (req,
 
 app.post('/api/server/start', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
-    if (serverStatus.online) return res.json({ success: true, message: 'Server already running' });
     const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
     if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
-    const files = await fs.readdir(MC_SERVER_DIR);
-    const forgeJar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
-    const jarPath = forgeJar ? path.join(MC_SERVER_DIR, forgeJar) : path.join(MC_SERVER_DIR, 'server.jar');
-    if (!await fs.pathExists(jarPath)) return res.status(500).json({ success: false, error: 'server jar not found' });
-    const mcProcess = spawn('java', ['-Xms256M', '-Xmx512M', '-jar', jarPath, '--nogui'], {
-      cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
-    });
-    mcProcess.unref();
-    forceReconnectRcon();
     logActivity(req.user.id, 'server_start', 'Started server', req.ip);
     res.json({ success: true, message: 'Server starting...' });
   } catch (err) {
@@ -393,23 +383,14 @@ app.post('/api/server/stop', authenticate, requireRole('owner', 'admin'), async 
 
 app.post('/api/server/restart', authenticate, requireRole('owner', 'admin'), async (req, res) => {
   try {
-    const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
-    if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
     if (serverStatus.online) {
-      await executeCommand('restart');
-    } else {
-      const files = await fs.readdir(MC_SERVER_DIR);
-      const forgeJar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
-      const jarPath = forgeJar ? path.join(MC_SERVER_DIR, forgeJar) : path.join(MC_SERVER_DIR, 'server.jar');
-      if (!await fs.pathExists(jarPath)) return res.status(500).json({ success: false, error: 'server jar not found' });
-      const mcProcess = spawn('java', ['-Xms256M', '-Xmx512M', '-jar', jarPath, '--nogui'], {
-        cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
-      });
-      mcProcess.unref();
-      forceReconnectRcon();
+      await executeCommand('stop');
     }
+    serverStatus.online = false;
+    serverStatus.players = [];
+    io.emit('serverStatus', serverStatus);
     logActivity(req.user.id, 'server_restart', 'Restarted server', req.ip);
-    res.json({ success: true });
+    res.json({ success: true, message: 'Server restarting...' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

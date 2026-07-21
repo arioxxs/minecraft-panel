@@ -82,28 +82,19 @@ PANEL_PID=$!
 
 echo "=== Panel: port 5000 | MC: port 25565 | RCON: port 25575 ==="
 
-trap "kill $MC_PID $PANEL_PID 2>/dev/null; exit" SIGTERM SIGINT
+trap "rm -f /data/STOPPED; kill $MC_PID $PANEL_PID 2>/dev/null; exit" SIGTERM SIGINT
 
-while true; do
-  if ! kill -0 $MC_PID 2>/dev/null; then
-    if [ -f /data/STOPPED ]; then
-      echo "Server stopped by user. Waiting..."
-      while [ -f /data/STOPPED ]; do sleep 5; done
-      echo "Restart requested!"
-      cd /data
-      java -Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:SoftRefLRUPolicyMSPerMB=0 -jar /data/server.jar --nogui &
-      MC_PID=$!
-      sleep 30
-      cd /app/backend
-    else
-      echo "MC crashed, restarting in 5s..."
-      sleep 5
-      cd /data
-      java -Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:SoftRefLRUPolicyMSPerMB=0 -jar /data/server.jar --nogui &
-      MC_PID=$!
-      sleep 30
-      cd /app/backend
-    fi
-  fi
-  sleep 5
-done
+# If MC dies, restart the whole container (clean memory)
+wait $MC_PID
+EXIT_CODE=$?
+
+if [ -f /data/STOPPED ]; then
+  echo "Server stopped by user. Waiting..."
+  while [ -f /data/STOPPED ]; do sleep 5; done
+  echo "Restart requested!"
+  rm -f /data/STOPPED
+fi
+
+echo "Exiting for restart..."
+kill $PANEL_PID 2>/dev/null
+exit $EXIT_CODE
