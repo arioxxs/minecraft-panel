@@ -13,10 +13,7 @@ let getStatus = null;
 let logAct = null;
 
 function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
-  if (!BOT_TOKEN) {
-    console.log('No TELEGRAM_BOT_TOKEN set, bot disabled');
-    return;
-  }
+  if (!BOT_TOKEN) { console.log('No TELEGRAM_BOT_TOKEN set, bot disabled'); return; }
   db = database;
   rconSend = executeCommandFn;
   getStatus = getStatusFn;
@@ -26,6 +23,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
   console.log('Telegram bot started');
 
   const authorizedUsers = {};
+  const sessions = {};
 
   function dbGet(sql, params = []) {
     const stmt = db.prepare(sql);
@@ -35,427 +33,487 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     stmt.free();
     return row;
   }
-
-  function dbRun(sql, params = []) {
-    db.run(sql, params);
-  }
+  function dbRun(sql, params = []) { db.run(sql, params); }
 
   function isAdmin(chatId) {
-    const user = authorizedUsers[chatId];
-    return user && ['owner', 'admin', 'moderator'].includes(user.role);
-  }
-
-  function isOwner(chatId) {
-    const user = authorizedUsers[chatId];
-    return user && user.role === 'owner';
-  }
-
-  function userLabel(chatId) {
     const u = authorizedUsers[chatId];
-    return u ? `${u.display_name || u.username} [${u.role}]` : 'Guest';
+    return u && ['owner', 'admin', 'moderator'].includes(u.role);
+  }
+  function isLoggedIn(chatId) {
+    return !!authorizedUsers[chatId];
   }
 
-  const btn = {
-    main: {
-      inline_keyboard: [
-        [{ text: '📊 Status', callback_data: 'status' }, { text: '👥 Players', callback_data: 'players' }],
-        [{ text: '🎮 Server', callback_data: 'server_menu' }, { text: '⚡ Quick', callback_data: 'quick_menu' }],
-        [{ text: '👤 Account', callback_data: 'account_menu' }, { text: '❓ Help', callback_data: 'help' }]
-      ]
-    },
-    server: {
-      inline_keyboard: [
-        [{ text: '▶️ Start', callback_data: 'srv_start' }, { text: '⏹ Stop', callback_data: 'srv_stop' }, { text: '🔄 Restart', callback_data: 'srv_restart' }],
-        [{ text: '💾 Save All', callback_data: 'srv_save' }],
-        [{ text: '◀️ Back', callback_data: 'main_menu' }]
-      ]
-    },
-    quick: {
-      inline_keyboard: [
-        [{ text: '☀️ Day', callback_data: 'q_day' }, { text: '🌙 Night', callback_data: 'q_night' }],
-        [{ text: '🌤 Sun', callback_data: 'q_sun' }, { text: '🌧 Rain', callback_data: 'q_rain' }],
-        [{ text: '😊 Peaceful', callback_data: 'q_peaceful' }, { text: '💀 Hard', callback_data: 'q_hard' }],
-        [{ text: '◀️ Back', callback_data: 'main_menu' }]
-      ]
-    },
-    account: {
-      inline_keyboard: [
-        [{ text: '📝 Register', callback_data: 'acc_register' }, { text: '🔑 Login', callback_data: 'acc_login' }],
-        [{ text: '🔄 Reset Pass', callback_data: 'acc_reset' }, { text: '🚪 Logout', callback_data: 'acc_logout' }],
-        [{ text: '◀️ Back', callback_data: 'main_menu' }]
-      ]
-    },
-    admin: {
-      inline_keyboard: [
-        [{ text: '🔨 Warn', callback_data: 'adm_warn' }, { text: '🚫 Ban', callback_data: 'adm_ban' }, { text: '✅ Unban', callback_data: 'adm_unban' }],
-        [{ text: '👢 Kick', callback_data: 'adm_kick' }, { text: '👑 OP', callback_data: 'adm_op' }, { text: '🚫 DeOP', callback_data: 'adm_deop' }],
-        [{ text: '🎮 Gamemode', callback_data: 'adm_gm' }, { text: '💻 Cmd', callback_data: 'adm_cmd' }],
-        [{ text: '◀️ Back', callback_data: 'main_menu' }]
-      ]
-    },
-    back_main: {
-      inline_keyboard: [[{ text: '◀️ Back', callback_data: 'main_menu' }]]
+  function sendWelcome(chatId) {
+    const u = authorizedUsers[chatId];
+    if (u) {
+      bot.sendMessage(chatId, `سلام ${u.display_name || u.username}!\nنقش: ${u.role}`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📊 وضعیت سرور', callback_data: 'm_status' }, { text: '👥 بازیکنان', callback_data: 'm_players' }],
+            [{ text: '🎮 کنترل سرور', callback_data: 'm_server' }, { text: '⚡ دستورات سریع', callback_data: 'm_quick' }],
+            [{ text: '🛠 مدیریت', callback_data: 'm_admin' }],
+            [{ text: '🚪 خروج', callback_data: 'm_logout' }]
+          ]
+        }
+      });
+    } else {
+      bot.sendMessage(chatId, '🎮 به MC Panel خوش اومدی!\n\nبرای استفاده از پنل وارد شو:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔑 ورود', callback_data: 'step_login' }, { text: '📝 ثبت‌نام', callback_data: 'step_register' }],
+            [{ text: '❓ راهنما', callback_data: 'm_help' }]
+          ]
+        }
+      });
     }
-  };
-
-  function showMenu(chatId, text, menuKey) {
-    bot.sendMessage(chatId, text, { reply_markup: btn[menuKey], parse_mode: 'HTML' });
   }
 
-  function askInput(chatId, text, expectKey) {
-    bot.sendMessage(chatId, text, { reply_markup: { force_reply: true } });
-    bot.once('reply_to_message', (reply) => {
-      if (reply.chat.id !== chatId) return;
-      const input = reply.text;
-      handleInput(chatId, expectKey, input);
-    });
+  function sendMainMenu(chatId, text) {
+    const u = authorizedUsers[chatId];
+    if (u) {
+      bot.sendMessage(chatId, text || 'منوی اصلی:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📊 وضعیت سرور', callback_data: 'm_status' }, { text: '👥 بازیکنان', callback_data: 'm_players' }],
+            [{ text: '🎮 کنترل سرور', callback_data: 'm_server' }, { text: '⚡ دستورات سریع', callback_data: 'm_quick' }],
+            [{ text: '🛠 مدیریت', callback_data: 'm_admin' }],
+            [{ text: '🚪 خروج', callback_data: 'm_logout' }]
+          ]
+        }
+      });
+    }
   }
 
-  function handleInput(chatId, key, input) {
-    const user = authorizedUsers[chatId];
-    const uid = user?.id;
+  // /start
+  bot.onText(/\/start/, (msg) => sendWelcome(msg.chat.id));
 
-    switch (key) {
-      case 'register': {
-        const parts = input.split(' ');
-        if (parts.length < 2) return showMenu(chatId, '❌ ناقصه. فرمت: <code>نام رمز</code>', 'account');
-        const [username, password] = parts;
-        if (username.length < 3) return showMenu(chatId, '❌ نام 3-20 کاراکتر', 'account');
-        if (password.length < 6) return showMenu(chatId, '❌ رمز حداقل 6 کاراکتر', 'account');
-        if (dbGet('SELECT id FROM users WHERE username = ?', [username])) return showMenu(chatId, '❌ تکراری!', 'account');
+  // reply handler for step-by-step input
+  bot.on('message', (msg) => {
+    const chatId = msg.chat.id;
+    const session = sessions[chatId];
+    if (!session || msg.text?.startsWith('/')) return;
+
+    const text = msg.text;
+
+    switch (session.step) {
+      case 'login_username': {
+        session.username = text;
+        session.step = 'login_password';
+        bot.sendMessage(chatId, '🔑 رمز عبور رو بفرست:', {
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
+        break;
+      }
+      case 'login_password': {
+        const user = dbGet('SELECT id,username,password,display_name,role,status FROM users WHERE username = ?', [session.username]);
+        if (!user) {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ کاربر یافت نشد!');
+        }
+        if (user.status === 'banned') {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ اکانت شما مسدود شده!');
+        }
+        if (!bcrypt.compareSync(text, user.password)) {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ رمز اشتباهه!');
+        }
+        authorizedUsers[chatId] = { id: user.id, username: user.username, role: user.role, display_name: user.display_name };
+        logAct(user.id, 'login', 'Logged in via Telegram', 'telegram');
+        delete sessions[chatId];
+        sendMainMenu(chatId, `✅ ورود موفق!\nسلام ${user.display_name || user.username}\nنقش: ${user.role}`);
+        break;
+      }
+      case 'register_username': {
+        if (text.length < 3 || text.length > 20) {
+          return bot.sendMessage(chatId, '❌ نام کاربری 3 تا 20 کاراکتر باشه.\nدوباره بفرست:');
+        }
+        if (dbGet('SELECT id FROM users WHERE username = ?', [text])) {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ این نام قبلاً ثبت شده!');
+        }
+        session.username = text;
+        session.step = 'register_password';
+        bot.sendMessage(chatId, '🔑 رمز عبور رو بفرست (حداقل 6 کاراکتر):', {
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
+        break;
+      }
+      case 'register_password': {
+        if (text.length < 6) {
+          return bot.sendMessage(chatId, '❌ رمز باید حداقل 6 کاراکتر باشه.\nدوباره بفرست:');
+        }
+        session.password = text;
+        session.step = 'register_confirm';
+        bot.sendMessage(chatId, '🔑 رمز رو دوباره بفرست برای تأیید:', {
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
+        break;
+      }
+      case 'register_confirm': {
+        if (text !== session.password) {
+          delete sessions[chatId];
+          return sendMainMenu(chatId, '❌ رمزها مطابقت ندارن!');
+        }
         const id = uuidv4();
-        const hash = bcrypt.hashSync(password, 10);
-        dbRun('INSERT INTO users (id,username,password,display_name,role,status) VALUES (?,?,?,?,?,?)', [id, username, hash, username, 'user', 'active']);
-        const token = jwt.sign({ id, username, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
-        authorizedUsers[chatId] = { id, username, role: 'user', display_name: username };
+        const hash = bcrypt.hashSync(session.password, 10);
+        dbRun('INSERT INTO users (id,username,password,display_name,role,status) VALUES (?,?,?,?,?,?)',
+          [id, session.username, hash, session.username, 'user', 'active']);
+        const token = jwt.sign({ id, username: session.username, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
+        authorizedUsers[chatId] = { id, username: session.username, role: 'user', display_name: session.username };
         logAct(id, 'register', 'Registered via Telegram', 'telegram');
-        showMenu(chatId, `✅ ثبت‌نام موفق!\nنام: <code>${username}</code>\nنقش: user`, 'main');
+        delete sessions[chatId];
+        sendMainMenu(chatId, `✅ ثبت‌نام موفق!\nنام: ${session.username}\nنقش: user`);
         break;
       }
-      case 'login': {
-        const parts = input.split(' ');
-        if (parts.length < 2) return showMenu(chatId, '❌ فرمت: <code>نام رمز</code>', 'account');
-        const [username, password] = parts;
-        const u = dbGet('SELECT id,username,password,display_name,role,status FROM users WHERE username = ?', [username]);
-        if (!u) return showMenu(chatId, '❌ کاربر یافت نشد!', 'account');
-        if (u.status === 'banned') return showMenu(chatId, '❌ مسدود شدی!', 'account');
-        if (!bcrypt.compareSync(password, u.password)) return showMenu(chatId, '❌ رمز اشتباه!', 'account');
-        authorizedUsers[chatId] = { id: u.id, username: u.username, role: u.role, display_name: u.display_name };
-        logAct(u.id, 'login', 'Logged in via Telegram', 'telegram');
-        showMenu(chatId, `✅ ورود موفق!\nسلام ${u.display_name || u.username}\nنقش: ${u.role}`, 'main');
+      case 'warn_target': {
+        session.target = text;
+        session.step = 'warn_reason';
+        bot.sendMessage(chatId, '📝 دلیل هشدار رو بفرست:', {
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
         break;
       }
-      case 'reset': {
-        const parts = input.split(' ');
-        if (parts.length < 2) return showMenu(chatId, '❌ فرمت: <code>نام رمزجدید</code>', 'account');
-        const [username, newPass] = parts;
-        if (newPass.length < 6) return showMenu(chatId, '❌ رمز حداقل 6 کاراکتر', 'account');
-        const u = dbGet('SELECT id FROM users WHERE username = ?', [username]);
-        if (!u) return showMenu(chatId, '❌ کاربر یافت نشد!', 'account');
-        dbRun('UPDATE users SET password = ? WHERE id = ?', [bcrypt.hashSync(newPass, 10), u.id]);
-        logAct(u.id, 'reset_password', 'Reset via Telegram', 'telegram');
-        showMenu(chatId, '✅ رمز تغییر کرد!', 'account');
+      case 'warn_reason': {
+        const u = dbGet('SELECT id FROM users WHERE username = ?', [session.target]);
+        if (!u) { delete sessions[chatId]; return sendMainMenu(chatId, '❌ کاربر یافت نشد!'); }
+        dbRun('INSERT INTO warnings (id,user_id,warned_by,reason,severity) VALUES (?,?,?,?,?)',
+          [uuidv4(), u.id, authorizedUsers[chatId]?.id, text, 'medium']);
+        logAct(authorizedUsers[chatId]?.id, 'warn_user', `Warned ${session.target}: ${text}`, 'telegram');
+        delete sessions[chatId];
+        sendMainMenu(chatId, `⚠️ هشدار به ${session.target} صادر شد.`);
         break;
       }
-      case 'warn': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const parts = input.split(' ');
-        if (parts.length < 2) return showMenu(chatId, '❌ فرمت: <code>نام دلیل</code>', 'admin');
-        const [target, ...rp] = parts;
-        const reason = rp.join(' ');
-        const u = dbGet('SELECT id FROM users WHERE username = ?', [target]);
-        if (!u) return showMenu(chatId, '❌ کاربر یافت نشد!', 'admin');
-        dbRun('INSERT INTO warnings (id,user_id,warned_by,reason,severity) VALUES (?,?,?,?,?)', [uuidv4(), u.id, uid, reason, 'medium']);
-        logAct(uid, 'warn_user', `Warned ${target}`, 'telegram');
-        showMenu(chatId, `⚠️ هشدار به <code>${target}</code> صادر شد.`, 'admin');
+      case 'ban_target': {
+        session.target = text;
+        session.step = 'ban_reason';
+        bot.sendMessage(chatId, '📝 دلیل بن رو بفرست:', {
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+        });
         break;
       }
-      case 'ban': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const parts = input.split(' ');
-        if (parts.length < 2) return showMenu(chatId, '❌ فرمت: <code>نام دلیل</code>', 'admin');
-        const [target, ...rp] = parts;
-        const reason = rp.join(' ');
-        dbRun('UPDATE users SET status = ? WHERE username = ?', ['banned', target]);
-        logAct(uid, 'ban_user', `Banned ${target}: ${reason}`, 'telegram');
-        showMenu(chatId, `🚫 <code>${target}</code> بن شد.`, 'admin');
+      case 'ban_reason': {
+        dbRun('UPDATE users SET status = ? WHERE username = ?', ['banned', session.target]);
+        logAct(authorizedUsers[chatId]?.id, 'ban_user', `Banned ${session.target}: ${text}`, 'telegram');
+        delete sessions[chatId];
+        sendMainMenu(chatId, `🚫 ${session.target} بن شد.`);
         break;
       }
-      case 'unban': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const target = input.trim();
-        dbRun('UPDATE users SET status = ? WHERE username = ?', ['active', target]);
-        logAct(uid, 'unban_user', `Unbanned ${target}`, 'telegram');
-        showMenu(chatId, `✅ بن <code>${target}</code> رفع شد.`, 'admin');
+      case 'cmd_input': {
+        rconSend(text).then(r => {
+          sendMainMenu(chatId, `📤 خروج:\n<code>${(r || 'بدون خروجی').substring(0, 1000)}</code>`);
+        }).catch(e => sendMainMenu(chatId, '❌ ' + e.message));
+        delete sessions[chatId];
         break;
       }
-      case 'kick': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const target = input.trim();
-        rconSend(`kick ${target} Kicked by admin`).then(() => {
-          logAct(uid, 'kick_player', `Kicked ${target}`, 'telegram');
-          showMenu(chatId, `👢 <code>${target}</code> اخراج شد.`, 'admin');
-        }).catch(e => showMenu(chatId, '❌ ' + e.message, 'admin'));
-        break;
-      }
-      case 'op': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const target = input.trim();
-        rconSend(`op ${target}`).then(() => {
-          logAct(uid, 'op_player', `Opped ${target}`, 'telegram');
-          showMenu(chatId, `👑 OP به <code>${target}</code> داده شد.`, 'admin');
-        }).catch(e => showMenu(chatId, '❌ ' + e.message, 'admin'));
-        break;
-      }
-      case 'deop': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const target = input.trim();
-        rconSend(`deop ${target}`).then(() => {
-          logAct(uid, 'deop_player', `De-opped ${target}`, 'telegram');
-          showMenu(chatId, `🚫 OP <code>${target}</code> گرفته شد.`, 'admin');
-        }).catch(e => showMenu(chatId, '❌ ' + e.message, 'admin'));
-        break;
-      }
-      case 'gm': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        const parts = input.split(' ');
-        if (parts.length < 2) return showMenu(chatId, '❌ فرمت: <code>نام حالت</code>\nsurvival/creative/adventure/spectator', 'admin');
-        const [target, mode] = parts;
-        rconSend(`gamemode ${mode} ${target}`).then(() => {
-          logAct(uid, 'gamemode', `Changed ${target} to ${mode}`, 'telegram');
-          showMenu(chatId, `🎮 گیم‌مود <code>${target}</code> → <code>${mode}</code>`, 'admin');
-        }).catch(e => showMenu(chatId, '❌ ' + e.message, 'admin'));
-        break;
-      }
-      case 'cmd': {
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        rconSend(input).then(r => {
-          showMenu(chatId, `📤 خروج:\n<code>${(r || 'بدون خروجی').substring(0, 1000)}</code>`, 'admin');
-        }).catch(e => showMenu(chatId, '❌ ' + e.message, 'admin'));
-        break;
-      }
-      default:
-        showMenu(chatId, '❓ ناشناخته', 'main');
     }
-  }
-
-  bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    const u = authorizedUsers[chatId];
-    const label = u ? `${u.display_name || u.username} [${u.role}]` : 'Guest';
-    let adminBtns = '';
-    if (isAdmin(chatId)) {
-      adminBtns = '\n\n<b>ادمین:</b> /admin - پنل مدیریت';
-    }
-    showMenu(chatId, `🎮 <b>MC Panel</b>\n\nسلام ${label}!${adminBtns}`, 'main');
   });
 
-  bot.onText(/\/admin/, (msg) => {
-    const chatId = msg.chat.id;
-    if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-    showMenu(chatId, '🔨 <b>پنل ادمین</b>\nیکی از عملیات رو انتخاب کن:', 'admin');
-  });
-
-  bot.onText(/\/help/, (msg) => {
-    showMenu(msg.chat.id, `<b>راهنما</b>\n\nاز دکمه‌ها استفاده کن یا دستورات:\n\n/start - منوی اصلی\n/admin - پنل ادمین\n/status - وضعیت سرور\n/logout - خروج`, 'back_main');
-  });
-
-  bot.onText(/\/status/, (msg) => {
-    const s = getStatus();
-    const status = s.online ? '🟢 آنلاین' : '🔴 آفلاین';
-    const text = `<b>وضعیت سرور</b>\n\nوضعیت: ${status}\nبازیکنان: ${s.players.length}/20\nTPS: ${s.tps ? s.tps.toFixed(1) : '--'}\nحافظه: ${s.memory.used || 0}MB\nورژن: ${s.version}\n\nبازیکنان:\n${s.players.length ? s.players.join(', ') : 'هیچکی'}`;
-    showMenu(msg.chat.id, text, 'back_main');
-  });
-
-  bot.onText(/\/logout/, (msg) => {
-    const chatId = msg.chat.id;
-    if (authorizedUsers[chatId]) {
-      delete authorizedUsers[chatId];
-    }
-    showMenu(chatId, '✅ خروج موفق!', 'main');
-  });
-
+  // callback_query handler
   bot.on('callback_query', (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
     bot.answerCallbackQuery(query.id);
 
-    switch (data) {
-      case 'main_menu': {
-        const u = authorizedUsers[chatId];
-        const label = u ? `${u.display_name || u.username} [${u.role}]` : 'Guest';
-        showMenu(chatId, `🎮 <b>MC Panel</b>\n\nسلام ${label}!`, 'main');
-        break;
-      }
-      case 'status': {
-        const s = getStatus();
-        const status = s.online ? '🟢 آنلاین' : '🔴 آفلاین';
-        showMenu(chatId, `<b>وضعیت سرور</b>\n\n${status}\nبازیکنان: ${s.players.length}/20\nTPS: ${s.tps ? s.tps.toFixed(1) : '--'}\nحافظه: ${s.memory.used || 0}MB\nورژن: ${s.version}\n\nبازیکنان:\n${s.players.length ? s.players.join(', ') : 'هیچکی'}`, 'back_main');
-        break;
-      }
-      case 'players': {
-        const s = getStatus();
-        const text = s.players.length
-          ? `<b>بازیکنان آنلاین (${s.players.length}):</b>\n\n${s.players.join('\n')}`
-          : 'هیچ بازیکنی آنلاین نیست.';
-        showMenu(chatId, text, 'back_main');
-        break;
-      }
-      case 'server_menu':
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        showMenu(chatId, '🎮 <b>کنترل سرور</b>', 'server');
-        break;
-      case 'quick_menu':
-        if (!isAdmin(chatId)) return showMenu(chatId, '❌ دسترسی نداری!', 'main');
-        showMenu(chatId, '⚡ <b>دستورات سریع</b>', 'quick');
-        break;
-      case 'account_menu':
-        showMenu(chatId, '👤 <b>حساب کاربری</b>', 'account');
-        break;
-      case 'help':
-        showMenu(chatId, `<b>راهنما</b>\n\nاز دکمه‌ها استفاده کن!\n\n/start - منوی اصلی\n/admin - پنل ادمین\n/status - وضعیت سرور\n/logout - خروج`, 'back_main');
-        break;
-      case 'srv_start': {
-        if (!isAdmin(chatId)) return;
-        const fs = require('fs-extra');
-        const path = require('path');
-        const MC_SERVER_DIR = process.env.MC_SERVER_DIR || '/data';
-        (async () => {
-          try {
-            const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
-            if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
+    // step cancel
+    if (data === 'step_cancel') {
+      delete sessions[chatId];
+      return sendMainMenu(chatId, '❌ لغو شد.');
+    }
+
+    // login steps
+    if (data === 'step_login') {
+      sessions[chatId] = { step: 'login_username' };
+      return bot.sendMessage(chatId, '📝 نام کاربری رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+
+    // register steps
+    if (data === 'step_register') {
+      sessions[chatId] = { step: 'register_username' };
+      return bot.sendMessage(chatId, '📝 نام کاربری رو بفرست (3-20 کاراکتر):', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+
+    // main menu
+    if (data === 'm_status') {
+      const s = getStatus();
+      const status = s.online ? '🟢 آنلاین' : '🔴 آفلاین';
+      return bot.sendMessage(chatId, `<b>وضعیت سرور</b>\n\n${status}\nبازیکنان: ${s.players.length}/20\nTPS: ${s.tps ? s.tps.toFixed(1) : '--'}\nحافظه: ${s.memory.used || 0}MB\nورژن: ${s.version}\n\nبازیکنان:\n${s.players.length ? s.players.join(', ') : 'هیچکی'}`, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_back' }]] }
+      });
+    }
+
+    if (data === 'm_players') {
+      const s = getStatus();
+      const text = s.players.length
+        ? `<b>بازیکنان آنلاین (${s.players.length}):</b>\n\n${s.players.join('\n')}`
+        : 'هیچ بازیکنی آنلاین نیست.';
+      return bot.sendMessage(chatId, text, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_back' }]] }
+      });
+    }
+
+    if (data === 'm_back') return sendMainMenu(chatId);
+
+    if (data === 'm_server') {
+      if (!isAdmin(chatId)) return bot.sendMessage(chatId, '❌ دسترسی نداری!');
+      return bot.sendMessage(chatId, '🎮 کنترل سرور:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '▶️ شروع', callback_data: 'srv_start' }, { text: '⏹ توقف', callback_data: 'srv_stop' }, { text: '🔄 ریستارت', callback_data: 'srv_restart' }],
+            [{ text: '💾 ذخیره همه', callback_data: 'srv_save' }],
+            [{ text: '◀️ بازگشت', callback_data: 'm_back' }]
+          ]
+        }
+      });
+    }
+
+    if (data === 'm_quick') {
+      if (!isAdmin(chatId)) return bot.sendMessage(chatId, '❌ دسترسی نداری!');
+      return bot.sendMessage(chatId, '⚡ دستورات سریع:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '☀️ روز', callback_data: 'q_day' }, { text: '🌙 شب', callback_data: 'q_night' }],
+            [{ text: '🌤 آفتابی', callback_data: 'q_sun' }, { text: '🌧 باران', callback_data: 'q_rain' }],
+            [{ text: '😊 آرام', callback_data: 'q_peaceful' }, { text: '💀 سخت', callback_data: 'q_hard' }],
+            [{ text: '◀️ بازگشت', callback_data: 'm_back' }]
+          ]
+        }
+      });
+    }
+
+    if (data === 'm_admin') {
+      if (!isAdmin(chatId)) return bot.sendMessage(chatId, '❌ دسترسی نداری!');
+      return bot.sendMessage(chatId, '🛠 مدیریت:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '⚠️ هشدار', callback_data: 'adm_warn' }, { text: '🚫 بن', callback_data: 'adm_ban' }, { text: '✅ رفع بن', callback_data: 'adm_unban' }],
+            [{ text: '👢 اخراج', callback_data: 'adm_kick' }, { text: '👑 OP', callback_data: 'adm_op' }, { text: '🚫 DeOP', callback_data: 'adm_deop' }],
+            [{ text: '🎮 گیم‌مود', callback_data: 'adm_gm' }, { text: '💻 کنسول', callback_data: 'adm_cmd' }],
+            [{ text: '◀️ بازگشت', callback_data: 'm_back' }]
+          ]
+        }
+      });
+    }
+
+    if (data === 'm_help') {
+      return bot.sendMessage(chatId, `<b>راهنما</b>\n\nاز دکمه‌ها استفاده کن!\n\n/start - منوی اصلی\n/logout - خروج`, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_back' }]] }
+      });
+    }
+
+    if (data === 'm_logout') {
+      delete authorizedUsers[chatId];
+      return sendWelcome(chatId);
+    }
+
+    // server actions
+    if (data === 'srv_start') {
+      if (!isAdmin(chatId)) return;
+      const fs = require('fs-extra');
+      const path = require('path');
+      const MC_SERVER_DIR = process.env.MC_SERVER_DIR || '/data';
+      (async () => {
+        try {
+          const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
+          if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
+          const { spawn } = require('child_process');
+          const files = await fs.readdir(MC_SERVER_DIR);
+          const jar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
+          const jarPath = jar ? path.join(MC_SERVER_DIR, jar) : path.join(MC_SERVER_DIR, 'server.jar');
+          if (!await fs.pathExists(jarPath)) return bot.sendMessage(chatId, '❌ فایل سرور نیست!');
+          const mc = spawn('java', ['-Xms200M', '-Xmx256M', '-jar', jarPath, '--nogui'], { cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true });
+          mc.unref();
+          logAct(authorizedUsers[chatId]?.id, 'server_start', 'Started via Telegram', 'telegram');
+          sendMainMenu(chatId, '▶️ سرور در حال راه‌اندازی...');
+        } catch (err) { sendMainMenu(chatId, '❌ ' + err.message); }
+      })();
+      return;
+    }
+
+    if (data === 'srv_stop') {
+      if (!isAdmin(chatId)) return;
+      const fs = require('fs-extra');
+      const MC_SERVER_DIR = process.env.MC_SERVER_DIR || '/data';
+      (async () => {
+        try {
+          await fs.writeFile(require('path').join(MC_SERVER_DIR, 'STOPPED'), 'stopped by telegram');
+          const s = getStatus();
+          if (s.online) await rconSend('stop');
+          logAct(authorizedUsers[chatId]?.id, 'server_stop', 'Stopped via Telegram', 'telegram');
+          sendMainMenu(chatId, '⏹ سرور خاموش شد.');
+        } catch (err) { sendMainMenu(chatId, '❌ ' + err.message); }
+      })();
+      return;
+    }
+
+    if (data === 'srv_restart') {
+      if (!isAdmin(chatId)) return;
+      const fs = require('fs-extra');
+      const path = require('path');
+      const MC_SERVER_DIR = process.env.MC_SERVER_DIR || '/data';
+      (async () => {
+        try {
+          const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
+          if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
+          const s = getStatus();
+          if (s.online) {
+            await rconSend('restart');
+          } else {
             const { spawn } = require('child_process');
             const files = await fs.readdir(MC_SERVER_DIR);
-            const forgeJar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
-            const jarPath = forgeJar ? path.join(MC_SERVER_DIR, forgeJar) : path.join(MC_SERVER_DIR, 'server.jar');
-            if (!await fs.pathExists(jarPath)) return showMenu(chatId, '❌ فایل سرور یافت نشد!', 'server');
+            const jar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
+            const jarPath = jar ? path.join(MC_SERVER_DIR, jar) : path.join(MC_SERVER_DIR, 'server.jar');
+            if (!await fs.pathExists(jarPath)) return bot.sendMessage(chatId, '❌ فایل سرور نیست!');
             const mc = spawn('java', ['-Xms200M', '-Xmx256M', '-jar', jarPath, '--nogui'], { cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true });
             mc.unref();
-            logAct(authorizedUsers[chatId]?.id, 'server_start', 'Started via Telegram', 'telegram');
-            showMenu(chatId, '▶️ سرور در حال راه‌اندازی...', 'server');
-          } catch (err) { showMenu(chatId, '❌ ' + err.message, 'server'); }
-        })();
-        break;
-      }
-      case 'srv_stop': {
-        if (!isAdmin(chatId)) return;
-        const fs = require('fs-extra');
-        const path = require('path');
-        const MC_SERVER_DIR = process.env.MC_SERVER_DIR || '/data';
-        (async () => {
-          try {
-            await fs.writeFile(path.join(MC_SERVER_DIR, 'STOPPED'), 'stopped by telegram');
-            const s = getStatus();
-            if (s.online) await rconSend('stop');
-            logAct(authorizedUsers[chatId]?.id, 'server_stop', 'Stopped via Telegram', 'telegram');
-            showMenu(chatId, '⏹ سرور خاموش شد.', 'server');
-          } catch (err) { showMenu(chatId, '❌ ' + err.message, 'server'); }
-        })();
-        break;
-      }
-      case 'srv_restart': {
-        if (!isAdmin(chatId)) return;
-        const fs = require('fs-extra');
-        const path = require('path');
-        const MC_SERVER_DIR = process.env.MC_SERVER_DIR || '/data';
-        (async () => {
-          try {
-            const stoppedFlag = path.join(MC_SERVER_DIR, 'STOPPED');
-            if (await fs.pathExists(stoppedFlag)) await fs.remove(stoppedFlag);
-            const s = getStatus();
-            if (s.online) {
-              await rconSend('restart');
-            } else {
-              const { spawn } = require('child_process');
-              const files = await fs.readdir(MC_SERVER_DIR);
-              const forgeJar = files.find(f => f.startsWith('forge-') && f.endsWith('-universal.jar'));
-              const jarPath = forgeJar ? path.join(MC_SERVER_DIR, forgeJar) : path.join(MC_SERVER_DIR, 'server.jar');
-              if (!await fs.pathExists(jarPath)) return showMenu(chatId, '❌ فایل سرور یافت نشد!', 'server');
-              const mc = spawn('java', ['-Xms200M', '-Xmx256M', '-jar', jarPath, '--nogui'], { cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true });
-              mc.unref();
-            }
-            logAct(authorizedUsers[chatId]?.id, 'server_restart', 'Restarted via Telegram', 'telegram');
-            showMenu(chatId, '🔄 سرور ریستارت شد.', 'server');
-          } catch (err) { showMenu(chatId, '❌ ' + err.message, 'server'); }
-        })();
-        break;
-      }
-      case 'srv_save': {
-        if (!isAdmin(chatId)) return;
-        rconSend('save-all').then(() => showMenu(chatId, '💾 ذخیره شد!', 'server')).catch(e => showMenu(chatId, '❌ ' + e.message, 'server'));
-        break;
-      }
-      case 'q_day':
-        if (!isAdmin(chatId)) return;
-        rconSend('time set day').then(() => showMenu(chatId, '☀️ روز شد!', 'quick')).catch(e => showMenu(chatId, '❌ ' + e.message, 'quick'));
-        break;
-      case 'q_night':
-        if (!isAdmin(chatId)) return;
-        rconSend('time set night').then(() => showMenu(chatId, '🌙 شب شد!', 'quick')).catch(e => showMenu(chatId, '❌ ' + e.message, 'quick'));
-        break;
-      case 'q_sun':
-        if (!isAdmin(chatId)) return;
-        rconSend('weather clear').then(() => showMenu(chatId, '🌤 آفتابی!', 'quick')).catch(e => showMenu(chatId, '❌ ' + e.message, 'quick'));
-        break;
-      case 'q_rain':
-        if (!isAdmin(chatId)) return;
-        rconSend('weather rain').then(() => showMenu(chatId, '🌧 باران!', 'quick')).catch(e => showMenu(chatId, '❌ ' + e.message, 'quick'));
-        break;
-      case 'q_peaceful':
-        if (!isAdmin(chatId)) return;
-        rconSend('difficulty peaceful').then(() => showMenu(chatId, '😊 آرام!', 'quick')).catch(e => showMenu(chatId, '❌ ' + e.message, 'quick'));
-        break;
-      case 'q_hard':
-        if (!isAdmin(chatId)) return;
-        rconSend('difficulty hard').then(() => showMenu(chatId, '💀 سخت!', 'quick')).catch(e => showMenu(chatId, '❌ ' + e.message, 'quick'));
-        break;
-      case 'acc_register':
-        if (authorizedUsers[chatId]) return showMenu(chatId, '✅ قبلاً وارد شدی!', 'main');
-        askInput(chatId, '📝 نام کاربری و رمز رو بفرست:\n\nفرمت: <code>نام رمز</code>', 'register');
-        break;
-      case 'acc_login':
-        if (authorizedUsers[chatId]) return showMenu(chatId, '✅ قبلاً وارد شدی!', 'main');
-        askInput(chatId, '🔑 نام و رمز رو بفرست:\n\nفرمت: <code>نام رمز</code>', 'login');
-        break;
-      case 'acc_reset':
-        askInput(chatId, '🔄 نام و رمز جدید رو بفرست:\n\nفرمت: <code>نام رمزجدید</code>', 'reset');
-        break;
-      case 'acc_logout':
-        delete authorizedUsers[chatId];
-        showMenu(chatId, '✅ خروج موفق!', 'main');
-        break;
-      case 'adm_warn':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '⚠️ نام بازیکن و دلیل رو بفرست:\n\nفرمت: <code>نام دلیل</code>', 'warn');
-        break;
-      case 'adm_ban':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '🚫 نام بازیکن و دلیل:\n\nفرمت: <code>نام دلیل</code>', 'ban');
-        break;
-      case 'adm_unban':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '✅ نام بازیکن:\n\nفرمت: <code>نام</code>', 'unban');
-        break;
-      case 'adm_kick':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '👢 نام بازیکن:\n\nفرمت: <code>نام</code>', 'kick');
-        break;
-      case 'adm_op':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '👑 نام بازیکن:\n\nفرمت: <code>نام</code>', 'op');
-        break;
-      case 'adm_deop':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '🚫 نام بازیکن:\n\nفرمت: <code>نام</code>', 'deop');
-        break;
-      case 'adm_gm':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '🎮 نام و حالت:\n\nفرمت: <code>نام survival</code>\nحالت‌ها: survival, creative, adventure, spectator', 'gm');
-        break;
-      case 'adm_cmd':
-        if (!isAdmin(chatId)) return;
-        askInput(chatId, '💻 دستور رو بفرست:\n\nمثال: <code>time set day</code>', 'cmd');
-        break;
+          }
+          logAct(authorizedUsers[chatId]?.id, 'server_restart', 'Restarted via Telegram', 'telegram');
+          sendMainMenu(chatId, '🔄 سرور ریستارت شد.');
+        } catch (err) { sendMainMenu(chatId, '❌ ' + err.message); }
+      })();
+      return;
+    }
+
+    if (data === 'srv_save') {
+      if (!isAdmin(chatId)) return;
+      rconSend('save-all').then(() => sendMainMenu(chatId, '💾 ذخیره شد!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message));
+      return;
+    }
+
+    // quick commands
+    if (data === 'q_day') { if (!isAdmin(chatId)) return; rconSend('time set day').then(() => sendMainMenu(chatId, '☀️ روز شد!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message)); return; }
+    if (data === 'q_night') { if (!isAdmin(chatId)) return; rconSend('time set night').then(() => sendMainMenu(chatId, '🌙 شب شد!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message)); return; }
+    if (data === 'q_sun') { if (!isAdmin(chatId)) return; rconSend('weather clear').then(() => sendMainMenu(chatId, '🌤 آفتابی!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message)); return; }
+    if (data === 'q_rain') { if (!isAdmin(chatId)) return; rconSend('weather rain').then(() => sendMainMenu(chatId, '🌧 باران!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message)); return; }
+    if (data === 'q_peaceful') { if (!isAdmin(chatId)) return; rconSend('difficulty peaceful').then(() => sendMainMenu(chatId, '😊 آرام!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message)); return; }
+    if (data === 'q_hard') { if (!isAdmin(chatId)) return; rconSend('difficulty hard').then(() => sendMainMenu(chatId, '💀 سخت!')).catch(e => sendMainMenu(chatId, '❌ ' + e.message)); return; }
+
+    // admin actions - step by step
+    if (data === 'adm_warn') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'warn_target' };
+      return bot.sendMessage(chatId, '📝 نام بازیکن رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+    if (data === 'adm_ban') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'ban_target' };
+      return bot.sendMessage(chatId, '📝 نام بازیکن رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+    if (data === 'adm_unban') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'unban_target' };
+      return bot.sendMessage(chatId, '📝 نام بازیکن رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+    if (data === 'adm_kick') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'kick_target' };
+      return bot.sendMessage(chatId, '📝 نام بازیکن رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+    if (data === 'adm_op') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'op_target' };
+      return bot.sendMessage(chatId, '📝 نام بازیکن رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+    if (data === 'adm_deop') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'deop_target' };
+      return bot.sendMessage(chatId, '📝 نام بازیکن رو بفرست:', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+    if (data === 'adm_gm') {
+      if (!isAdmin(chatId)) return;
+      return bot.sendMessage(chatId, '🎮 گیم‌مود رو انتخاب کن:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '生存 Survival', callback_data: 'gm_survival' }, { text: 'خلاقیت Creative', callback_data: 'gm_creative' }],
+            [{ text: 'ماجراجویی Adventure', callback_data: 'gm_adventure' }, { text: 'تماشاگر Spectator', callback_data: 'gm_spectator' }],
+            [{ text: '❌ لغو', callback_data: 'step_cancel' }]
+          ]
+        }
+      });
+    }
+    if (data === 'adm_cmd') {
+      if (!isAdmin(chatId)) return;
+      sessions[chatId] = { step: 'cmd_input' };
+      return bot.sendMessage(chatId, '💻 دستور رو بفرست:\nمثال: time set day', {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+
+    // gamemode sub-steps
+    if (data.startsWith('gm_')) {
+      if (!isAdmin(chatId)) return;
+      const mode = data.replace('gm_', '');
+      sessions[chatId] = { step: 'gm_target', mode };
+      return bot.sendMessage(chatId, `📝 نام بازیکن رو بفرست (حالت: ${mode}):`, {
+        reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }
+      });
+    }
+  });
+
+  // handle remaining step-based inputs (unban, kick, op, deop, gm_target)
+  bot.on('message', (msg) => {
+    const chatId = msg.chat.id;
+    const session = sessions[chatId];
+    if (!session || msg.text?.startsWith('/')) return;
+
+    const text = msg.text;
+
+    if (session.step === 'unban_target') {
+      dbRun('UPDATE users SET status = ? WHERE username = ?', ['active', text]);
+      logAct(authorizedUsers[chatId]?.id, 'unban_user', `Unbanned ${text}`, 'telegram');
+      delete sessions[chatId];
+      return sendMainMenu(chatId, `✅ بن ${text} رفع شد.`);
+    }
+    if (session.step === 'kick_target') {
+      rconSend(`kick ${text} Kicked by admin`).then(() => {
+        logAct(authorizedUsers[chatId]?.id, 'kick_player', `Kicked ${text}`, 'telegram');
+        sendMainMenu(chatId, `👢 ${text} اخراج شد.`);
+      }).catch(e => sendMainMenu(chatId, '❌ ' + e.message));
+      delete sessions[chatId];
+      return;
+    }
+    if (session.step === 'op_target') {
+      rconSend(`op ${text}`).then(() => {
+        logAct(authorizedUsers[chatId]?.id, 'op_player', `Opped ${text}`, 'telegram');
+        sendMainMenu(chatId, `👑 OP به ${text} داده شد.`);
+      }).catch(e => sendMainMenu(chatId, '❌ ' + e.message));
+      delete sessions[chatId];
+      return;
+    }
+    if (session.step === 'deop_target') {
+      rconSend(`deop ${text}`).then(() => {
+        logAct(authorizedUsers[chatId]?.id, 'deop_player', `De-opped ${text}`, 'telegram');
+        sendMainMenu(chatId, `🚫 OP ${text} گرفته شد.`);
+      }).catch(e => sendMainMenu(chatId, '❌ ' + e.message));
+      delete sessions[chatId];
+      return;
+    }
+    if (session.step === 'gm_target') {
+      rconSend(`gamemode ${session.mode} ${text}`).then(() => {
+        logAct(authorizedUsers[chatId]?.id, 'gamemode', `Changed ${text} to ${session.mode}`, 'telegram');
+        sendMainMenu(chatId, `🎮 گیم‌مود ${text} → ${session.mode}`);
+      }).catch(e => sendMainMenu(chatId, '❌ ' + e.message));
+      delete sessions[chatId];
+      return;
     }
   });
 }
