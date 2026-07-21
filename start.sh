@@ -49,7 +49,7 @@ echo "[3/4] Starting Minecraft server..."
 cd /data
 rm -f /data/STOPPED
 
-java -Xms256M -Xmx384M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -jar /data/server.jar --nogui &
+java -Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:SoftRefLRUPolicyMSPerMB=0 -jar /data/server.jar --nogui &
 MC_PID=$!
 
 echo "MC PID: $MC_PID"
@@ -91,7 +91,7 @@ while true; do
       while [ -f /data/STOPPED ]; do sleep 5; done
       echo "Restart requested!"
       cd /data
-      java -Xms256M -Xmx384M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -jar /data/server.jar --nogui &
+      java -Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:SoftRefLRUPolicyMSPerMB=0 -jar /data/server.jar --nogui &
       MC_PID=$!
       sleep 30
       cd /app/backend
@@ -99,7 +99,7 @@ while true; do
       echo "MC crashed, restarting in 5s..."
       sleep 5
       cd /data
-      java -Xms256M -Xmx384M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -jar /data/server.jar --nogui &
+      java -Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:SoftRefLRUPolicyMSPerMB=0 -jar /data/server.jar --nogui &
       MC_PID=$!
       sleep 30
       cd /app/backend

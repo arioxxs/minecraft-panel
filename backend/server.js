@@ -52,7 +52,8 @@ const PLUGINS_DIR = path.join(MC_SERVER_DIR, 'plugins');
 
 let rcon = null;
 let rconRetries = 0;
-let rconConnecting = false;
+let rconLocked = false;
+let rconReconnectTimer = null;
 let serverStatus = {
   online: false,
   players: [],
@@ -62,26 +63,32 @@ let serverStatus = {
   version: process.env.VERSION || '1.16.5'
 };
 
-let rconLocked = false;
+function scheduleRconReconnect(delay) {
+  if (rconReconnectTimer) clearTimeout(rconReconnectTimer);
+  rconReconnectTimer = setTimeout(connectRcon, delay);
+}
 
 async function connectRcon() {
   if (rconLocked) return;
   rconLocked = true;
+  
+  if (rcon) {
+    try { rcon.removeAllListeners(); rcon.end(); } catch(e) {}
+    rcon = null;
+  }
+
   try {
-    if (rcon) {
-      try { rcon.removeAllListeners(); rcon.end(); } catch(e) {}
-      rcon = null;
-    }
     rcon = await Rcon.connect({
       host: process.env.MC_HOST || '127.0.0.1',
       port: parseInt(process.env.MC_RCON_PORT) || 25575,
       password: process.env.MC_RCON_PASSWORD || 'minecraft123',
       timeout: 10000
     });
-    console.log('RCON Connected successfully');
+    console.log('RCON Connected');
     rconRetries = 0;
     serverStatus.online = true;
     io.emit('serverStatus', serverStatus);
+    rconLocked = false;
     
     rcon.on('end', () => {
       console.log('RCON Disconnected');
@@ -89,7 +96,7 @@ async function connectRcon() {
       rcon = null;
       rconLocked = false;
       io.emit('serverStatus', serverStatus);
-      setTimeout(connectRcon, 5000);
+      scheduleRconReconnect(5000);
     });
 
     rcon.on('error', (err) => {
@@ -101,14 +108,18 @@ async function connectRcon() {
       rcon = null;
     }
     rconRetries++;
-    let delay;
-    if (rconRetries <= 5) delay = 15000;
-    else if (rconRetries <= 10) delay = 30000;
-    else delay = 60000;
-    console.log('RCON failed (attempt ' + rconRetries + '), retry in ' + (delay/1000) + 's: ' + err.message);
+    const delay = rconRetries <= 3 ? 15000 : 30000;
+    console.log('RCON failed (' + rconRetries + '), retry in ' + (delay/1000) + 's: ' + err.message);
     rconLocked = false;
-    setTimeout(connectRcon, delay);
+    scheduleRconReconnect(delay);
   }
+}
+
+function forceReconnectRcon() {
+  rconRetries = 0;
+  if (rconReconnectTimer) clearTimeout(rconReconnectTimer);
+  rconLocked = false;
+  scheduleRconReconnect(2000);
 }
 
 async function executeCommand(cmd) {
@@ -352,9 +363,7 @@ app.post('/api/server/start', authenticate, requireRole('owner', 'admin'), async
       cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
     });
     mcProcess.unref();
-    rconRetries = 0;
-    rconConnecting = false;
-    setTimeout(connectRcon, 15000);
+    forceReconnectRcon();
     logActivity(req.user.id, 'server_start', 'Started server', req.ip);
     res.json({ success: true, message: 'Server starting...' });
   } catch (err) {
@@ -394,9 +403,7 @@ app.post('/api/server/restart', authenticate, requireRole('owner', 'admin'), asy
         cwd: MC_SERVER_DIR, stdio: 'ignore', detached: true
       });
       mcProcess.unref();
-      rconRetries = 0;
-      rconConnecting = false;
-      setTimeout(connectRcon, 15000);
+      forceReconnectRcon();
     }
     logActivity(req.user.id, 'server_restart', 'Restarted server', req.ip);
     res.json({ success: true });
