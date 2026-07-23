@@ -110,8 +110,11 @@ if [ -f /data/STOPPED ]; then
   while [ -f /data/STOPPED ]; do sleep 5; done
   echo "Restart requested!"
   rm -f /data/STOPPED
+  echo "Exiting with code 1 for Railway restart..."
+  kill $PANEL_PID 2>/dev/null
+  exit 1
 fi
 
-echo "Exiting for restart..."
+echo "Unexpected exit (code $EXIT_CODE), triggering Railway restart..."
 kill $PANEL_PID 2>/dev/null
-exit $EXIT_CODE
+exit 1
