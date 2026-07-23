@@ -19,7 +19,9 @@ fi
 
 echo "eula=true" > /data/eula.txt
 
-cat > /data/server.properties << 'EOF'
+if [ ! -f /data/server.properties ]; then
+  echo "Generating fresh server.properties..."
+  cat > /data/server.properties << 'EOF'
 server-port=25565
 level-name=world
 gamemode=survival
@@ -44,6 +46,9 @@ pvp=true
 allow-flight=false
 max-tick-time=60000
 EOF
+else
+  echo "server.properties already exists, keeping user settings"
+fi
 
 echo "[3/4] Starting Minecraft server..."
 cd /data
@@ -51,6 +56,21 @@ rm -f /data/STOPPED
 
 java -Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:SoftRefLRUPolicyMSPerMB=0 -jar /data/server.jar --nogui &
 MC_PID=$!
+
+save_and_exit() {
+  echo ""
+  echo "Shutting down - saving world..."
+  if kill -0 $MC_PID 2>/dev/null; then
+    mcrcon -H localhost -P 25575 -p minecraft123 "save-all" 2>/dev/null || true
+    mcrcon -H localhost -P 25575 -p minecraft123 "stop" 2>/dev/null || true
+    sleep 3
+  fi
+  rm -f /data/STOPPED
+  kill $PANEL_PID 2>/dev/null
+  exit 0
+}
+
+trap save_and_exit SIGTERM SIGINT
 
 echo "MC PID: $MC_PID"
 echo "Waiting for RCON on port 25575..."
@@ -82,9 +102,6 @@ PANEL_PID=$!
 
 echo "=== Panel: port 5000 | MC: port 25565 | RCON: port 25575 ==="
 
-trap "rm -f /data/STOPPED; kill $MC_PID $PANEL_PID 2>/dev/null; exit" SIGTERM SIGINT
-
-# If MC dies, restart the whole container (clean memory)
 wait $MC_PID
 EXIT_CODE=$?
 
