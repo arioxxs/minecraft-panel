@@ -148,4 +148,47 @@ router.delete('/:id', authenticate, requireRole('owner'), (req, res) => {
   }
 });
 
+router.get('/:id/permissions', authenticate, (req, res) => {
+  try {
+    const { getUserPermissions, hasPermission } = require('../auth');
+    if (req.user.id !== req.params.id && !hasPermission(req.user.id, 'manage_roles')) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const perms = getUserPermissions(req.params.id);
+    res.json(perms);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/:id/permissions', authenticate, requireRole('owner', 'admin'), (req, res) => {
+  try {
+    const { permission } = req.body;
+    if (!permission) return res.status(400).json({ error: 'Permission required' });
+    const { setUserPermission, hasPermission } = require('../auth');
+    if (req.user.role !== 'owner' && !hasPermission(req.user.id, 'manage_roles')) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    setUserPermission(req.params.id, permission, req.user.id);
+    logActivity(req.user.id, 'grant_permission', `Granted ${permission} to user ${req.params.id}`, req.ip);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/:id/permissions/:permission', authenticate, requireRole('owner', 'admin'), (req, res) => {
+  try {
+    const { removeUserPermission, hasPermission } = require('../auth');
+    if (req.user.role !== 'owner' && !hasPermission(req.user.id, 'manage_roles')) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    removeUserPermission(req.params.id, req.params.permission);
+    logActivity(req.user.id, 'revoke_permission', `Revoked ${req.params.permission} from user ${req.params.id}`, req.ip);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

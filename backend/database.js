@@ -87,6 +87,17 @@ async function initDatabase() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS user_permissions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      permission TEXT NOT NULL,
+      granted_by TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   initializePermissions();
   createDefaultOwner();
   saveDatabase();

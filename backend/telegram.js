@@ -28,7 +28,17 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
 
   function dbGet(sql, p = []) { const s = db.prepare(sql); if (p.length) s.bind(p); let r = null; if (s.step()) r = s.getAsObject(); s.free(); return r; }
   function dbRun(sql, p = []) { db.run(sql, p); }
-  function ok(c) { const u = auth[c]; return u && ['owner','admin','moderator'].includes(u.role); }
+  function ok(c, perm) {
+    const u = auth[c];
+    if (!u) return false;
+    if (u.role === 'owner') return true;
+    if (!perm) return ['owner','admin','moderator'].includes(u.role);
+    const rolePerm = dbGet('SELECT id FROM permissions WHERE role = ? AND permission = ?', [u.role, perm]);
+    if (rolePerm) return true;
+    const userPerm = dbGet('SELECT id FROM user_permissions WHERE user_id = ? AND permission = ?', [u.id, perm]);
+    if (userPerm) return true;
+    return false;
+  }
 
   function edit(c, txt, markup) {
     const mid = lastMsg[c];
@@ -160,6 +170,25 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     if (s.step === 'deop_user') { rconSend(`deop ${t}`).then(() => mainMenu(c, `🚫 DeOP → ${t}`)).catch(e => mainMenu(c, '❌ ' + e.message)); delete sess[c]; return; }
     if (s.step === 'gm_user') { rconSend(`gamemode ${s.mode} ${t}`).then(() => mainMenu(c, `🎮 ${t} → ${s.mode}`)).catch(e => mainMenu(c, '❌ ' + e.message)); delete sess[c]; return; }
     if (s.step === 'cmd_exec') { rconSend(t).then(r => mainMenu(c, `📤 <code>${(r || 'بدون خروجی').substring(0, 1500)}</code>`)).catch(e => mainMenu(c, '❌ ' + e.message)); delete sess[c]; return; }
+
+    if (s.step === 'perms_user') {
+      const u = dbGet('SELECT id,username,display_name,role FROM users WHERE username = ?', [t]);
+      if (!u) return edit(c, '❌ کاربر یافت نشد!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] });
+      s.targetId = u.id; s.targetName = u.username; s.step = 'perms_perm';
+      return edit(c, `🔐 <b>${u.display_name || u.username}</b> (${u.role})\n\n📝 نام دسترسی (مثلاً manage_server, execute_commands):\n\nیا /done برای اتمام`, { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] });
+    }
+    if (s.step === 'perms_perm') {
+      if (t === '/done') { delete sess[c]; return mainMenu(c, '✅ دسترسی‌ها بروزرسانی شد.'); }
+      const existing = dbGet('SELECT id FROM user_permissions WHERE user_id = ? AND permission = ?', [s.targetId, t]);
+      if (existing) {
+        dbRun('DELETE FROM user_permissions WHERE user_id = ? AND permission = ?', [s.targetId, t]);
+        edit(c, `✅ دسترسی <code>${t}</code> از ${s.targetName} گرفته شد.\n\n📝 دستور بعدی یا /done:`, { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] });
+      } else {
+        dbRun('INSERT INTO user_permissions (id, user_id, permission, granted_by) VALUES (?, ?, ?, ?)', [uuidv4(), s.targetId, t, auth[c]?.id]);
+        edit(c, `✅ دسترسی <code>${t}</code> به ${s.targetName} داده شد.\n\n📝 دستور بعدی یا /done:`, { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] });
+      }
+      return;
+    }
   });
 
   // === CALLBACK HANDLER ===
@@ -227,7 +256,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     }
 
     if (d === 'srv_start') {
-      if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
+      if (!ok(c, 'manage_server')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
       const DIR = process.env.MC_SERVER_DIR || '/data';
       const flag = require('path').join(DIR, 'STOPPED');
       const fs = require('fs-extra');
@@ -237,7 +266,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     }
 
     if (d === 'srv_stop') {
-      if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
+      if (!ok(c, 'manage_server')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
       const DIR = process.env.MC_SERVER_DIR || '/data';
       await require('fs-extra').writeFile(require('path').join(DIR, 'STOPPED'), 'stopped');
       const s = getStatus();
@@ -247,7 +276,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
     }
 
     if (d === 'srv_restart') {
-      if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
+      if (!ok(c, 'manage_server')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_server' }]] });
       const s = getStatus();
       if (s.online) await rconSend('stop');
       edit(c, '🔄 <b>ریستارت شد.</b>\n\nلطفاً ۳۰ ثانیه صبر کن.', { inline_keyboard: [[{ text: '📊 وضعیت', callback_data: 'm_status' }, { text: '◀️ بازگشت', callback_data: 'm_server' }]] });
@@ -271,33 +300,48 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
         ]
       });
     }
-    if (d === 'q_day') { if (!ok(c)) return; rconSend('time set day').then(() => edit(c, '☀️ <b>روز شد!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
-    if (d === 'q_night') { if (!ok(c)) return; rconSend('time set night').then(() => edit(c, '🌙 <b>شب شد!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
-    if (d === 'q_sun') { if (!ok(c)) return; rconSend('weather clear').then(() => edit(c, '🌤 <b>آفتابی!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
-    if (d === 'q_rain') { if (!ok(c)) return; rconSend('weather rain').then(() => edit(c, '🌧 <b>باران!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀ی بازگشت', callback_data: 'm_quick' }]] })); return; }
-    if (d === 'q_peaceful') { if (!ok(c)) return; rconSend('difficulty peaceful').then(() => edit(c, '😊 <b>آرام!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
-    if (d === 'q_hard') { if (!ok(c)) return; rconSend('difficulty hard').then(() => edit(c, '💀 <b>سخت!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
+    if (d === 'q_day') { if (!ok(c, 'execute_commands')) return; rconSend('time set day').then(() => edit(c, '☀️ <b>روز شد!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
+    if (d === 'q_night') { if (!ok(c, 'execute_commands')) return; rconSend('time set night').then(() => edit(c, '🌙 <b>شب شد!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
+    if (d === 'q_sun') { if (!ok(c, 'execute_commands')) return; rconSend('weather clear').then(() => edit(c, '🌤 <b>آفتابی!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
+    if (d === 'q_rain') { if (!ok(c, 'execute_commands')) return; rconSend('weather rain').then(() => edit(c, '🌧 <b>باران!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
+    if (d === 'q_peaceful') { if (!ok(c, 'execute_commands')) return; rconSend('difficulty peaceful').then(() => edit(c, '😊 <b>آرام!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
+    if (d === 'q_hard') { if (!ok(c, 'execute_commands')) return; rconSend('difficulty hard').then(() => edit(c, '💀 <b>سخت!</b>', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })).catch(e => edit(c, '❌ ' + e.message, { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_quick' }]] })); return; }
 
     // ADMIN
     if (d === 'm_admin') {
       if (!ok(c)) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_back' }]] });
-      return edit(c, '🛠 <b>مدیریت</b>', {
+      const hasPermMgmt = ok(c, 'manage_roles');
+      const btns = [
+        [{ text: '⚠️ هشدار', callback_data: 'a_warn' }, { text: '🚫 بن', callback_data: 'a_ban' }, { text: '✅ رفع بن', callback_data: 'a_unban' }],
+        [{ text: '👢 اخراج', callback_data: 'a_kick' }, { text: '👑 OP', callback_data: 'a_op' }, { text: '🚫 DeOP', callback_data: 'a_deop' }],
+        [{ text: '🎮 گیم‌مود', callback_data: 'a_gm' }, { text: '💻 کنسول', callback_data: 'a_cmd' }],
+      ];
+      if (hasPermMgmt) btns.push([{ text: '🔐 دسترسی‌ها', callback_data: 'a_perms' }]);
+      btns.push([{ text: '◀️ بازگشت', callback_data: 'm_back' }]);
+      return edit(c, '🛠 <b>مدیریت</b>', { inline_keyboard: btns });
+    }
+    if (d === 'a_perms') {
+      if (!ok(c, 'manage_roles')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] });
+      sess[c] = { step: 'perms_user' };
+      return edit(c, '🔐 <b>مدیریت دسترسی‌ها</b>\n\n📝 نام کاربری:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] });
+    }
+    if (d === 'a_warn') { if (!ok(c, 'manage_warnings')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'warn_user' }; return edit(c, '⚠️ <b>هشدار</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_ban') { if (!ok(c, 'manage_bans')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'ban_user' }; return edit(c, '🚫 <b>بن</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_unban') { if (!ok(c, 'manage_bans')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'unban_user' }; return edit(c, '✅ <b>رفع بن</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_kick') { if (!ok(c, 'kick_players')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'kick_user' }; return edit(c, '👢 <b>اخراج</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_op') { if (!ok(c, 'manage_players')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'op_user' }; return edit(c, '👑 <b>OP</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_deop') { if (!ok(c, 'manage_players')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'deop_user' }; return edit(c, '🚫 <b>DeOP</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_cmd') { if (!ok(c, 'execute_commands')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] }); sess[c] = { step: 'cmd_exec' }; return edit(c, '💻 <b>کنسول</b>\n\n📝 دستور:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
+    if (d === 'a_gm') {
+      if (!ok(c, 'manage_players')) return edit(c, '❌ دسترسی نداری!', { inline_keyboard: [[{ text: '◀️ بازگشت', callback_data: 'm_admin' }]] });
+      return edit(c, '🎮 <b>گیم‌مود</b>', {
         inline_keyboard: [
-          [{ text: '⚠️ هشدار', callback_data: 'a_warn' }, { text: '🚫 بن', callback_data: 'a_ban' }, { text: '✅ رفع بن', callback_data: 'a_unban' }],
-          [{ text: '👢 اخراج', callback_data: 'a_kick' }, { text: '👑 OP', callback_data: 'a_op' }, { text: '🚫 DeOP', callback_data: 'a_deop' }],
-          [{ text: '🎮 گیم‌مود', callback_data: 'a_gm' }, { text: '💻 کنسول', callback_data: 'a_cmd' }],
-          [{ text: '◀️ بازگشت', callback_data: 'm_back' }]
+          [{ text: '生存', callback_data: 'gm_survival' }, { text: 'خلاقیت', callback_data: 'gm_creative' }],
+          [{ text: 'ماجراجویی', callback_data: 'gm_adventure' }, { text: 'تماشاگر', callback_data: 'gm_spectator' }],
+          [{ text: '❌ لغو', callback_data: 'step_cancel' }]
         ]
       });
     }
-    if (d === 'a_warn') { sess[c] = { step: 'warn_user' }; return edit(c, '⚠️ <b>هشدار</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_ban') { sess[c] = { step: 'ban_user' }; return edit(c, '🚫 <b>بن</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_unban') { sess[c] = { step: 'unban_user' }; return edit(c, '✅ <b>رفع بن</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_kick') { sess[c] = { step: 'kick_user' }; return edit(c, '👢 <b>اخراج</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_op') { sess[c] = { step: 'op_user' }; return edit(c, '👑 <b>OP</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_deop') { sess[c] = { step: 'deop_user' }; return edit(c, '🚫 <b>DeOP</b>\n\n📝 نام بازیکن:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_cmd') { sess[c] = { step: 'cmd_exec' }; return edit(c, '💻 <b>کنسول</b>\n\n📝 دستور:', { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
-    if (d === 'a_gm') { return edit(c, '🎮 <b>گیم‌مود</b>', { inline_keyboard: [[{ text: '生存', callback_data: 'gm_survival' }, { text: 'خلاقیت', callback_data: 'gm_creative' }], [{ text: 'ماجراجویی', callback_data: 'gm_adventure' }, { text: 'تماشاگر', callback_data: 'gm_spectator' }], [{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
     if (d.startsWith('gm_')) { sess[c] = { step: 'gm_user', mode: d.replace('gm_', '') }; return edit(c, `📝 نام بازیکن (${sess[c].mode}):`, { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'step_cancel' }]] }); }
   });
 }

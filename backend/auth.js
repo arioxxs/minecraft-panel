@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { getDb } = require('./database');
-const { dbGet } = require('./dbHelper');
+const { dbGet, dbRun, dbAll } = require('./dbHelper');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'mc-panel-secret-key';
 
@@ -66,19 +66,44 @@ function requireRole(...roles) {
   };
 }
 
+function getUserPermissions(userId) {
+  const db = getDb();
+  const user = dbGet(db, 'SELECT role FROM users WHERE id = ?', [userId]);
+  if (!user) return [];
+
+  const rolePerms = dbAll(db, 'SELECT permission FROM permissions WHERE role = ?', [user.role]) || [];
+  const userPerms = dbAll(db, 'SELECT permission FROM user_permissions WHERE user_id = ?', [userId]) || [];
+
+  const perms = new Set();
+  rolePerms.forEach(p => perms.add(p.permission));
+  userPerms.forEach(p => perms.add(p.permission));
+  return [...perms];
+}
+
+function hasPermission(userId, permission) {
+  const perms = getUserPermissions(userId);
+  return perms.includes(permission);
+}
+
+function setUserPermission(userId, permission, grantedBy) {
+  const db = getDb();
+  const existing = dbGet(db, 'SELECT id FROM user_permissions WHERE user_id = ? AND permission = ?', [userId, permission]);
+  if (existing) return;
+  dbRun(db, 'INSERT INTO user_permissions (id, user_id, permission, granted_by) VALUES (?, ?, ?, ?)',
+    [require('uuid').v4(), userId, permission, grantedBy]);
+}
+
+function removeUserPermission(userId, permission) {
+  const db = getDb();
+  dbRun(db, 'DELETE FROM user_permissions WHERE user_id = ? AND permission = ?', [userId, permission]);
+}
+
 function requirePermission(permission) {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-
-    const db = getDb();
-    const hasPermission = dbGet(db,
-      'SELECT id FROM permissions WHERE role = ? AND permission = ?',
-      [req.user.role, permission]
-    );
-
-    if (!hasPermission) {
+    if (!hasPermission(req.user.id, permission)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     next();
@@ -88,7 +113,6 @@ function requirePermission(permission) {
 function logActivity(userId, action, details, ipAddress) {
   const db = getDb();
   const { v4: uuidv4 } = require('uuid');
-  const { dbRun } = require('./dbHelper');
   dbRun(db, 'INSERT INTO activity_log (id, user_id, action, details, ip_address) VALUES (?, ?, ?, ?, ?)',
     [uuidv4(), userId, action, details, ipAddress]);
 }
@@ -99,5 +123,9 @@ module.exports = {
   authenticate, 
   requireRole, 
   requirePermission,
+  getUserPermissions,
+  hasPermission,
+  setUserPermission,
+  removeUserPermission,
   logActivity 
 };
