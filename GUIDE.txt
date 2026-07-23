@@ -1,0 +1,154 @@
+=== MC PANEL - PROJECT GUIDE ===
+==================================
+
+== OVERVIEW ==
+Minecraft server panel with web UI, Telegram bot, and RCON control.
+Server: Paper 1.16.5 build 794 | Java 11 | Alpine Linux (node:18-alpine + openjdk11-jre)
+
+== URLs ==
+Web Panel : https://minecraft-panel-production-6f5e.up.railway.app/
+GitHub    : https://github.com/arioxxs/minecraft-panel
+Local     : http://localhost:5000
+
+== ACCOUNTS ==
+Admin Username : admin
+Admin Password : admin123
+JWT Secret     : mc-panel-secret-key-change-in-production-2024 (fallback: mc-panel-secret-key)
+
+== PORTS ==
+5000  - Web Panel (Express)
+25565 - Minecraft Server
+25575 - RCON
+
+== RCON ==
+Password : minecraft123
+Host     : localhost
+Port     : 25575
+
+== TELEGRAM BOT ==
+Token    : 8681026339:AAF5aRxBmHvqv7ULyJfDnYv2EFIgVF_TkA8
+Status   : Enabled (polling mode, set via Railway env TELEGRAM_BOT_TOKEN)
+
+Features : Login/Register, Server Status, Online Players, Server Control
+           (start/stop/restart/save), Quick Commands (day/night/sun/rain/
+           peaceful/hard), Admin Tools (warn/ban/unban/kick/OP/DeOP/
+           gamemode/console)
+Language : Persian (Persian)
+
+== RAILWAY ==
+Project Name : minecraft-panel
+Platform     : Railway.app (Docker)
+Builder      : Dockerfile
+Restart      : On Failure (max 3 retries)
+Volume       : /data/db (persistent SQLite database)
+Env Vars     : TELEGRAM_BOT_TOKEN (set in Railway Dashboard)
+Config Files : railway.toml (primary) + railway.json (fallback)
+
+== SERVER PROPERTIES ==
+online-mode          : false
+max-players          : 5 (container) / 10 (local)
+difficulty           : normal
+gamemode             : survival
+view-distance        : 6 (container) / 8 (local)
+simulation-distance  : 4 (container) / 6 (local)
+pvp                  : true
+allow-flight         : false
+generate-structures  : true
+spawn-protection     : 0
+max-tick-time        : 60000
+level-type           : DEFAULT
+
+== JAVA FLAGS ==
+-Xms200M -Xmx256M -XX:+UseG1GC -XX:MaxGCPauseMillis=50
+-XX:SoftRefLRUPolicyMSPerMB=0
+
+== LOCAL ENV (backend/.env) ==
+PORT=5000
+MC_HOST=localhost
+MC_RCON_PORT=25575
+MC_RCON_PASSWORD=minecraft123
+MC_QUERY_PORT=25565
+MC_SERVER_DIR=/data
+MC_WEB_UI_PORT=8080
+JWT_SECRET=mc-panel-secret-key-change-in-production-2024
+SESSION_EXPIRY=7d
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+PANEL_URL=http://localhost:5000
+
+== ARCHITECTURE ==
+start.sh -> MC server (background) + wait RCON -> Node.js panel (server.js)
+server.js -> Express + Socket.IO + RCON client + Telegram bot
+MC crashes -> start.sh restarts it in-process
+Stop via STOPPED flag file (/data/STOPPED)
+
+== PROJECT STRUCTURE ==
+E:\DNS.Jumper.2.2\minecraft-panel\
+|
++-- Dockerfile              (node:18-alpine + openjdk11-jre)
++-- railway.toml            (Railway deploy config)
++-- railway.json            (Railway schema config)
++-- docker-compose.yml      (Local Docker Compose)
++-- start.sh                (Entrypoint: MC server + panel)
++-- server.properties       (Local MC config)
++-- GUIDE.txt               (THIS FILE)
+|
++-- backend\
+|   +-- server.js           (Express app - routes, RCON, status, backups)
+|   +-- telegram.js         (Telegram bot - Persian inline keyboard UI)
+|   +-- auth.js             (JWT auth middleware)
+|   +-- database.js         (SQLite init via sql.js)
+|   +-- dbHelper.js         (SQL helper functions)
+|   +-- .env                (Local env vars - NOT committed)
+|   +-- package.json        (Dependencies)
+|   +-- routes\
+|       +-- auth.js         (Login/register API)
+|       +-- users.js        (User management API)
+|       +-- logs.js         (Activity log API)
+|
++-- panel\
+    +-- index.html          (Web UI - Persian RTL, Minecraft-themed)
+    +-- style.css           (CSS styles)
+    +-- app.js              (Frontend JS - Socket.IO client)
+    +-- nginx.conf          (Unused - Docker-based, no nginx)
+
+== WEB PANEL FEATURES ==
+- Login / Register (JWT token auth)
+- Server status (online/offline indicator, players list, TPS, memory)
+- Start / Stop / Restart server
+- Player list (kick, ban, OP, DeOP)
+- Console (send MC commands)
+- Backup & Restore (world archives)
+- Scheduled tasks (auto-restart, backup)
+- Settings (server.properties editor)
+- User roles: owner, admin, moderator, user
+- Whitelist toggle
+- Activity logs
+
+== TELEGRAM BOT MENU ==
+/start -> Guest: Login / Register / Reset Password
+         Main: Status, Players, Server Control, Quick Commands, Admin
+         
+Main Menu:
+  [Status] [Players]
+  [Server Control] [Quick Commands]
+  [Admin]
+  [Logout]
+
+== IMPORTANT NOTES ==
+- MC server may OOM on first start (Paperclip patch extraction with 256MB RAM)
+- STOPPED flag at /data/STOPPED: when exists, server waits instead of restarting
+- Railway healthcheck removed (was causing issues with multi-port exposure)
+- SQLite database at /data/db/panel.db (persisted via Railway volume)
+- .gitignore excludes: node_modules/, .env, *.jar, *.log, server.properties
+- GH Token in remote URL: (set in git remote, not shown)
+- SESSION_EXPIRY: 7 days
+
+== KNOWN ISSUES ==
+- Railway healthcheck was failing (panel starts too slow after MC OOM restart)
+- healthcheck removed - Railway uses default TCP check now
+- If deploy fails: increase railway.toml healthcheckTimeout or check Railway logs

@@ -163,7 +163,7 @@ function initBot(database, executeCommandFn, getStatusFn, logActivityFn) {
   });
 
   // === CALLBACK HANDLER ===
-  bot.on('callback_query', (q) => {
+  bot.on('callback_query', async (q) => {
     const c = q.message.chat.id;
     const d = q.data;
     const mid = q.message.message_id;

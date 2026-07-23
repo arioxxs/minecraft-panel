@@ -114,7 +114,10 @@ function enterApp() {
   if (isAdmin) {
     document.getElementById('secUsers').style.display = '';
     document.getElementById('cardUsers').style.display = '';
+    document.getElementById('secConfig').style.display = '';
+    document.getElementById('cardConfig').style.display = '';
     loadUsers();
+    loadConfig();
   }
   
   document.querySelectorAll('.control-buttons .mc-btn').forEach(btn => {
@@ -273,4 +276,19 @@ async function loadLogs() {
     if (!d.logs || !d.logs.length) { c.innerHTML = '<span style="color:#666">لاگی نیست</span>'; return; }
     c.innerHTML = d.logs.map(l => '<div class="console-line"><span style="color:#3498db">' + (l.created_at || '') + '</span> | <span style="color:#FFD700">' + (l.username || 'sys') + '</span> | ' + l.action + (l.details ? ' - ' + l.details : '') + '</div>').join('');
   } catch { document.getElementById('logsList').innerHTML = '<span style="color:#ef4444">خطا</span>'; }
+}
+
+async function loadConfig() {
+  try {
+    const d = await apiGet('/api/config');
+    const c = document.getElementById('configList');
+    if (!d || !Object.keys(d).length) { c.innerHTML = '<span style="color:#666">تنظیماتی نیست</span>'; return; }
+    const keys = { 'server-port': 'پورت', 'max-players': 'حداکثر بازیکن', 'difficulty': 'سختی', 'gamemode': 'حالت بازی', 'pvp': 'PVP', 'view-distance': 'فاصله دید', 'online-mode': 'حالت آنلاین', 'motd': 'پیام سرور', 'level-name': 'جهان', 'enable-rcon': 'RCON' };
+    c.innerHTML = Object.entries(d).map(([k, v]) =>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(0,0,0,0.3);border:1px solid #333;margin-bottom:5px">' +
+      '<span>' + (keys[k] || k) + '</span>' +
+      '<span style="color:#ccc;direction:ltr;text-align:left">' + v + '</span>' +
+      '</div>'
+    ).join('');
+  } catch { document.getElementById('configList').innerHTML = '<span style="color:#ef4444">خطا</span>'; }
 }
